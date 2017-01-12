@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<executable>
+  <category>Utilities</category>
+  <title>ScatteredTransform</title>
+  <description><![CDATA[Interpolates a displacement field defined using scatetered points using a Multi Level B-Spline algorithm and saves the result as a B-Spline transform.]]></description>
+  <version>0.0.1</version>
+  <documentation-url>http://www.example.com/Slicer/Modules/Scattered_transform</documentation-url>
+  <license>Slicer</license>
+  <contributor>Grand Roman Joldes (The University of Western Australia)</contributor>
+  <acknowledgements>G. R. Joldes has been funded by Raine Medical Research Foundation through a Raine Priming Grant. </acknowledgements>
+  <parameters advanced="false">
+    <label>Input files</label>
+    <description><![CDATA[Input files containing point coordinates]]></description>
+    <file>
+      <name>initialPointsFile</name>
+      <longflag>initialPointsFile</longflag>
+      <label>File with initial point positions</label>
+      <channel>input</channel>
+      <default></default>
+      <description><![CDATA[File with initial point positions]]></description>
+    </file>
+    <file>
+      <name>displacedPointsFile</name>
+      <longflag>displacedPointsFile</longflag>
+      <label>File with displaced point positions</label>
+      <channel>input</channel>
+      <default></default>
+      <description><![CDATA[File with displaced point positions]]></description>
+    </file>
+    <boolean>
+      <name>ignoreFirstValue</name>
+      <longflag>ignoreFirstValue</longflag>
+      <label>   Ignore first value</label>
+      <description>Igores first value in each line of the input files (which may be a node number).</description>
+      <default>false</default>
+    </boolean>
+  </parameters>
+  <parameters advanced="false">
+    <label>Output transform</label>
+    <description><![CDATA[Output transform]]></description>
+    <transform fileExtensions=".h5,.hdf5,.mat,.txt" type="bspline">
+      <name>bsplineTransform</name>
+      <longflag>bsplineTransform</longflag>
+      <label>Slicer BSpline Transform</label>
+      <description>Slicer transform node for the generated B-Spline transform. NOTE: Only 3D transforms are handled by 3D Slicer! Transforms are not handled properly by 3D Slicer version 4.3 and older!</description>
+      <channel>output</channel>
+      <default></default>
+    </transform>
+    <file fileExtensions=".h5,.hdf5,.mat,.txt">
+      <name>bsplineTransformFile</name>
+      <longflag>bsplineTransformFile</longflag>
+      <label>BSpline Transform file</label>
+      <channel>output</channel>
+      <default></default>
+      <description><![CDATA[File where to save the transform.]]></description>
+    </file>
+    <string-enumeration>
+      <name>transformSpaceDimension</name>
+      <longflag>transformSpaceDimension</longflag>
+      <label>   Space dimension</label>
+      <description>The space dimension.</description>
+      <default>3D</default>
+      <element>1D</element>
+      <element>2D</element>
+      <element>3D</element>
+    </string-enumeration>
+    <string-enumeration>
+      <name>transformCS</name>
+      <longflag>transformCS</longflag>
+      <label>   For use in:</label>
+      <description>This switch influences conversion between ITK and Slicer coordinate systems (3D only).</description>
+      <default>Slicer</default>
+      <element>ITK</element>
+      <element>Slicer</element>
+    </string-enumeration>
+    <boolean>
+      <name>invertTransform</name>
+      <longflag>invertTransform</longflag>
+      <label>   Invert transform</label>
+      <description>Inverts the transform. Always done if transform is for use in Slicer. </description>
+      <default>true</default>
+    </boolean>
+    <boolean>
+      <name>useLinearApproximation</name>
+      <longflag>useLinearApproximation</longflag>
+      <label>   Use linear approximation</label>
+      <description>Sets the initial B-Spline grid values using a linear approximation of the data.</description>
+      <default>true</default>
+    </boolean>
+    <float-vector>
+      <name>splineGridSpacing</name>
+      <longflag>splineGridSpacing</longflag>
+      <label>   B-Spline Grid Spacing</label>
+      <description>The distance between the BSpline control grid points.</description>
+      <default>100,100,100</default>
+    </float-vector>
+    <boolean>
+      <name>domainFromInputPoints</name>
+      <longflag>domainFromInputPoints</longflag>
+      <label>   Domain computed from input points</label>
+      <description>Computes the transform domain as the bounding box of the input points.</description>
+      <default>true</default>
+    </boolean>
+    <float-vector>
+      <name>minCoordinates</name>
+      <longflag>minCoordinates</longflag>
+      <label>   Minimum domain coordinates</label>
+      <description>The minimum coordinates of the domain.</description>
+      <default>0,0,0</default>
+    </float-vector>
+    <float-vector>
+      <name>maxCoordinates</name>
+      <longflag>maxCoordinates</longflag>
+      <label>   Maximum domain coordinates</label>
+      <description>The maximum coordinates of the domain.</description>
+      <default>100,100,100</default>
+    </float-vector>
+    <double>
+      <name>tolerance</name>
+      <longflag>tolerance</longflag>
+      <label>   Tolerance</label>
+      <description>Absolute tolerance in approximating the transform at the input points.</description>
+      <default>0.1</default>
+    </double>
+    <double>
+      <name>minGridSpacing</name>
+      <longflag>minGridSpacing</longflag>
+      <label>   Minimum grid spacing</label>
+      <description>Minimum grid spacing during grid refinement.</description>
+      <default>0.1</default>
+    </double>
+    <integer>
+      <name>maxNumLevels</name>
+      <longflag>maxNumLevels</longflag>
+      <description>Maximum number of levels of B-Spline refinements.</description>
+      <label>   Maximum number of levels</label>
+      <default>10</default>
+    </integer>
+  </parameters>
+</executable>
