@@ -10,7 +10,7 @@ set(EXTENSION_CONTRIBUTORS "Grand Joldes (The University of Western Australia, I
 set(EXTENSION_DESCRIPTION "Creates a BSpline transform from a displacement field defined at scattered points by using the Multi-level BSpline interpolation algorithm.")
 set(EXTENSION_ICONURL "http://www.example.com/Slicer/Extensions/ScatteredTransform.png")
 set(EXTENSION_SCREENSHOTURLS "http://www.example.com/Slicer/Extensions/ScatteredTransform/Screenshots/1.png")
-set(EXTENSION_DEPENDS "Boost") # Specified as a space separated string, a list or 'NA' if any
+set(EXTENSION_DEPENDS "NA") # Specified as a space separated string, a list or 'NA' if any
 
 #-----------------------------------------------------------------------------
 # Extension dependencies

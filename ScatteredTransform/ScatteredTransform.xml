@@ -2,7 +2,7 @@
 <executable>
   <category>Utilities</category>
   <title>ScatteredTransform</title>
-  <description><![CDATA[Interpolates a displacement field defined using scatetered points using a Multi Level B-Spline algorithm and saves the result as a B-Spline transform.]]></description>
+  <description><![CDATA[Creates a BSpline transform from a displacement field defined at scattered points by using the Multi-level BSpline interpolation algorithm.]]></description>
   <version>0.0.1</version>
   <documentation-url>http://www.example.com/Slicer/Modules/Scattered_transform</documentation-url>
   <license>Slicer</license>
