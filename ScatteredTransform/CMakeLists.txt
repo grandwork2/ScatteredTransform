@@ -8,14 +8,10 @@ set(MODULE_NAME ScatteredTransform)
 # SlicerExecutionModel
 #
 
-find_package(Boost REQUIRED)
-
-
-
 #-----------------------------------------------------------------------------
 set(MODULE_INCLUDE_DIRECTORIES
   ${vtkITK_INCLUDE_DIRS}
-  ${Boost_INCLUDE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}
   )
 
 set(MODULE_SRCS
