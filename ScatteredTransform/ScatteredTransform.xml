@@ -1,13 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <executable>
   <category>Utilities</category>
-  <title>ScatteredTransform</title>
+  <title>Scattered Transform</title>
   <description><![CDATA[Creates a BSpline transform from a displacement field defined at scattered points by using the Multi-level BSpline interpolation algorithm.]]></description>
   <version>0.0.1</version>
-  <documentation-url>http://www.example.com/Slicer/Modules/Scattered_transform</documentation-url>
+  <documentation-url>http://slicer.org/slicerWiki/index.php/Documentation/Nightly/Extensions/ScatteredTransform>
   <license>Slicer</license>
   <contributor>Grand Roman Joldes (The University of Western Australia)</contributor>
   <acknowledgements>G. R. Joldes has been funded by Raine Medical Research Foundation through a Raine Priming Grant. </acknowledgements>
+  <parameters advanced="false">
+    <label>Input points</label>
+    <description><![CDATA[Input point coordinates]]></description>
+    <point multiple="true">
+      <name>initialLandmarks</name>
+      <description><![CDATA[Ordered list of landmarks in initial position. Select these from the moving image if the resulting transform is used for image registration.]]></description>
+      <label>Initial landmarks</label>
+      <longflag>initialLandmarks</longflag>
+      <default></default>
+      <channel>input</channel>
+    </point>
+    <point multiple="true">
+      <name>displacedLandmarks</name>
+      <description><![CDATA[Ordered list of landmarks in displaced position. Select these from the fixed image if the resulting transform is used for image registration.]]></description>
+      <label>Displaced landmarks</label>
+      <longflag>displacedLandmarks</longflag>
+      <default></default>
+      <channel>input</channel>
+    </point>
+  </parameters>
   <parameters advanced="false">
     <label>Input files</label>
     <description><![CDATA[Input files containing point coordinates]]></description>
@@ -38,7 +58,7 @@
   <parameters advanced="false">
     <label>Output transform</label>
     <description><![CDATA[Output transform]]></description>
-    <transform fileExtensions=".h5,.hdf5,.mat,.txt" type="bspline">
+    <transform fileExtensions=".h5,.hdf5,.mat,.txt,.tfm" type="bspline">
       <name>bsplineTransform</name>
       <longflag>bsplineTransform</longflag>
       <label>Slicer BSpline Transform</label>
@@ -46,7 +66,7 @@
       <channel>output</channel>
       <default></default>
     </transform>
-    <file fileExtensions=".h5,.hdf5,.mat,.txt">
+    <file fileExtensions=".h5,.hdf5,.mat,.txt,.tfm">
       <name>bsplineTransformFile</name>
       <longflag>bsplineTransformFile</longflag>
       <label>BSpline Transform file</label>

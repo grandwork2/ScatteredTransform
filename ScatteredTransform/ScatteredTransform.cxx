@@ -60,6 +60,8 @@ namespace
 		MBATransform() {};
 		virtual int iReadInitialPoints(const char *pcInitialPoints, bool boIgnoreFirstValue, bool boTransformCS) = 0;
 		virtual int iReadDisplacedPoints(const char *pcDisplacedPoints, bool boIgnoreFirstValue, bool boTransformCS) = 0;
+		virtual void vGetLandmarks(const std::vector<std::vector<float>> &initialLandmarks, 
+			const std::vector<std::vector<float>> &displacedLandmarks, bool boTransformCS) = 0;
 		virtual int iCreateTransform(const std::vector<double> &adGridSpacing, bool boDomainFromInputPoints,
 			const std::vector<double> &adDomainMinCorner, const std::vector<double> &adDomainMaxCorner,
 			const double dTolerance, unsigned int uiMaxNumLevels, const double minGridSpacing, const bool boAddLinearApproximation) = 0;
@@ -79,6 +81,10 @@ namespace
 		int iReadDisplacedPoints(const char *pcDisplacedPoints, bool boIgnoreFirstValue,  bool boTransformCS) {
 			return iReadPoints(pcDisplacedPoints, DisplacedPoints, boIgnoreFirstValue, boTransformCS);
 		};
+
+		void vGetLandmarks(const std::vector<std::vector<float>> &initialLandmarks, 
+			const std::vector<std::vector<float>> &displacedLandmarks, bool boTransformCS);
+			
 		int iCreateTransform(const std::vector<double> &adGridSpacing, bool boDomainFromInputPoints,
 			const std::vector<double> &adDomainMinCorner, const std::vector<double> &adDomainMaxCorner,
 			const double dTolerance, unsigned int uiMaxNumLevels, const double minGridSpacing, const bool boAddLinearApproximation);
@@ -211,6 +217,47 @@ namespace
 		std::cout << "Read " << numPoints << " points from file " << pcFile << std::endl;
 		return 0;
 	};
+
+	template <unsigned SpaceDimension>
+	void MBATransformND<SpaceDimension>::vGetLandmarks(const std::vector<std::vector<float>> &initialLandmarks, 
+		const std::vector<std::vector<float>> &displacedLandmarks, bool boTransformCS)
+	{
+		pointType pi, pd;
+		size_t numPoints = initialLandmarks.size();
+		std::cout << "Processing " << numPoints << " landmarks." << std::endl;
+		for (size_t k = 0; k < numPoints; k++)
+		{
+			const std::vector<float> &initial_landmark = initialLandmarks.at(k);
+			const std::vector<float> &displaced_landmark = displacedLandmarks.at(k);
+			unsigned i;
+			for (i = 0; i < SpaceDimension - 1; i++)
+			{
+				if (SpaceDimension == 3)
+				{
+					if (boTransformCS)
+					{
+						pi[i] = -initial_landmark[i];
+						pd[i] = -displaced_landmark[i];
+					}
+					else
+					{
+						pi[i] = initial_landmark[i];
+						pd[i] = displaced_landmark[i];
+					}
+				}
+				else
+				{
+					pi[i] = initial_landmark[i];
+					pd[i] = displaced_landmark[i];
+				}
+			}
+			pi[i] = initial_landmark[i];
+			pd[i] = displaced_landmark[i];
+			InitialPoints.push_back(pi);
+			DisplacedPoints.push_back(pd);
+		}
+	}
+
 
 	template <unsigned SpaceDimension> 
 	int MBATransformND<SpaceDimension>::iCreateTransform(const std::vector<double> &adGridSpacing, bool boDomainFromInputPoints,
@@ -415,15 +462,29 @@ int main( int argc, char * argv[] )
 	// check for input errors
 	TCLAP::StdOutput TCLAP_output;
 	bool boError = false;
-	if (initialPointsFile.size() == 0)
+	bool boGetPointsFromFiles = false;
+	if (initialLandmarks.size() <= 0 && displacedLandmarks.size() <= 0)
 	{
-		std::cerr << "ERROR: no file containing initial point locations specified!" << std::endl;
-		boError = true;
+		boGetPointsFromFiles = true;
 	}
-	if (displacedPointsFile.size() == 0)
+	else if (initialLandmarks.size() != displacedLandmarks.size())
 	{
-		std::cerr << "ERROR: no file containing displaced point locations specified!" << std::endl;
-		boError = true;
+		std::cerr << "Initial and displaced landmark lists must be of the same size "
+			<< "and contain at least one point. Looking for input files." << std::endl;
+		boGetPointsFromFiles = true;
+	}
+	if (boGetPointsFromFiles == true)
+	{
+		if (initialPointsFile.size() == 0)
+		{
+			std::cerr << "ERROR: no file containing initial point locations specified!" << std::endl;
+			boError = true;
+		}
+		if (displacedPointsFile.size() == 0)
+		{
+			std::cerr << "ERROR: no file containing displaced point locations specified!" << std::endl;
+			boError = true;
+		}
 	}
 	if ((bsplineTransformFile.size() == 0) && (bsplineTransform.size() == 0))
 	{
@@ -541,17 +602,24 @@ int main( int argc, char * argv[] )
 		pcInitialPoints = pcDisplacedPoints;
 		pcDisplacedPoints = pcSave;
 	}
-
-	if (pTransform->iReadInitialPoints(pcInitialPoints, boIgnoreFirstValue, boTransformCS))
+	if (boGetPointsFromFiles == true)
 	{
-		std::cerr << "Failed to read initial points from "<< pcInitialPoints << std::endl;
-		return EXIT_FAILURE;
-	};
+		if (pTransform->iReadInitialPoints(pcInitialPoints, boIgnoreFirstValue, boTransformCS))
+		{
+			std::cerr << "Failed to read initial points from " << pcInitialPoints << std::endl;
+			return EXIT_FAILURE;
+		};
 
-	if (pTransform->iReadDisplacedPoints(pcDisplacedPoints, boIgnoreFirstValue, boTransformCS))
+		if (pTransform->iReadDisplacedPoints(pcDisplacedPoints, boIgnoreFirstValue, boTransformCS))
+		{
+			std::cerr << "Failed to read displaced points from " << pcDisplacedPoints << std::endl;
+			return EXIT_FAILURE;
+		};
+	}
+	else
 	{
-		std::cerr << "Failed to read displaced points from "<< pcDisplacedPoints << std::endl;
-		return EXIT_FAILURE;
+		if (boInvertTransform) pTransform->vGetLandmarks(displacedLandmarks, initialLandmarks, boTransformCS);
+		else pTransform->vGetLandmarks(initialLandmarks, displacedLandmarks, boTransformCS);
 	};
 
 	if (pTransform->iCreateTransform(adGridSpacing, boDomainFromInputPoints, adDomainMinCorner, adDomainMaxCorner,
