@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <executable>
-  <category>Utilities</category>
+  <category>Registration.Specialized</category>
   <title>Scattered Transform</title>
   <description><![CDATA[Creates a BSpline transform from a displacement field defined at scattered points by using the Multi-level BSpline interpolation algorithm.]]></description>
   <version>0.0.1</version>
