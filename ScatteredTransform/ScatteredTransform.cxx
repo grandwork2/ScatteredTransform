@@ -491,21 +491,28 @@ int main( int argc, char * argv[] )
 		std::cerr << "ERROR: no output transform file or Slicer transform specified!" << std::endl;
 		boError = true;
 	}
-	if (boError)
-	{
-		TCLAP_output.usage(commandLine);
-		return EXIT_FAILURE;
-	}
-
+	
 	// set up parameters
 	// the space dimension (1, 2 or 3)
 	unsigned int uiSpaceDimension = 3;
 	if (transformSpaceDimension == "2D") uiSpaceDimension = 2;
 	else if (transformSpaceDimension == "1D") uiSpaceDimension = 1;
 
+	if ((uiSpaceDimension != 3) && (bsplineTransformFile.size() == 0))
+	{
+		std::cerr << "ERROR: You need to specify an output transform file for 1D and 2D transforms!" << std::endl;
+		boError = true;
+	}
+
+	if (boError)
+	{
+		TCLAP_output.usage(commandLine);
+		return EXIT_FAILURE;
+	}
+
 	// perform coordinate transform?
 	bool boTransformCS = false;
-	if (transformCS == "Slicer") boTransformCS = true;
+	if (intendedUse == "Slicer") boTransformCS = true;
 
 	// If set true, the first value read from a line of values is ignored
 	bool boIgnoreFirstValue = ignoreFirstValue;
@@ -519,9 +526,9 @@ int main( int argc, char * argv[] )
 	if (boTransformCS) boInvertTransform = true;
 
 	std::vector<double> adGridSpacing;		// grid spacing
-	if (splineGridSpacing.size() != uiSpaceDimension)
+	if (splineGridSpacing.size() < uiSpaceDimension)
 	{
-		std::cerr << "ERROR: The number of grid spacing values is different from space dimension!" << std::endl;
+		std::cerr << "ERROR: The number of grid spacing values is lower than space dimension!" << std::endl;
 		return EXIT_FAILURE;
 	}
 	for (unsigned int i = 0; i < uiSpaceDimension; i++)
@@ -534,14 +541,14 @@ int main( int argc, char * argv[] )
 	std::vector<double> adDomainMaxCorner;
 	if (!boDomainFromInputPoints)
 	{
-		if (minCoordinates.size() != uiSpaceDimension)
+		if (minCoordinates.size() < uiSpaceDimension)
 		{
-			std::cerr << "ERROR: The number of minimum domain coordinates is different from space dimension!" << std::endl;
+			std::cerr << "ERROR: The number of minimum domain coordinates is lower than space dimension!" << std::endl;
 			return EXIT_FAILURE;
 		}
-		if (maxCoordinates.size() != uiSpaceDimension)
+		if (maxCoordinates.size() < uiSpaceDimension)
 		{
-			std::cerr << "ERROR: The number of maximum domain coordinates is different from space dimension!" << std::endl;
+			std::cerr << "ERROR: The number of maximum domain coordinates is lower than space dimension!" << std::endl;
 			return EXIT_FAILURE;
 		}
 		for (unsigned int i = 0; i < uiSpaceDimension; i++)
@@ -635,9 +642,12 @@ int main( int argc, char * argv[] )
 	{
 		ret = pTransform->iSaveTransform(bsplineTransformFile.c_str());
 	}
-	if (bsplineTransform.size())
+	if (uiSpaceDimension == 3)
 	{
-		ret = pTransform->iSaveTransform(bsplineTransform.c_str());
+		if (bsplineTransform.size())
+		{
+			ret = pTransform->iSaveTransform(bsplineTransform.c_str());
+		}
 	}
 	
 	return ret;
