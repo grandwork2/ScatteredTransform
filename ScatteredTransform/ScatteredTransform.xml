@@ -11,7 +11,7 @@
   <parameters advanced="false">
     <label>Input points</label>
     <description><![CDATA[Input point coordinates]]></description>
-    <point multiple="true" coordinateSystem="lps">
+    <point multiple="true">
       <name>initialLandmarks</name>
       <description><![CDATA[Ordered list of landmarks in initial position. Select these from the moving image if the resulting transform is used for image registration.]]></description>
       <label>Initial landmarks</label>
@@ -19,7 +19,7 @@
       <default></default>
       <channel>input</channel>
     </point>
-    <point multiple="true" coordinateSystem="lps">
+    <point multiple="true">
       <name>displacedLandmarks</name>
       <description><![CDATA[Ordered list of landmarks in displaced position. Select these from the fixed image if the resulting transform is used for image registration.]]></description>
       <label>Displaced landmarks</label>
