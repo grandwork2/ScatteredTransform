@@ -636,7 +636,7 @@ int main( int argc, char * argv[] )
 		return EXIT_FAILURE;
 	}
 
-	int ret;
+	int ret = EXIT_SUCCESS;
 	// save transform
 	if (bsplineTransformFile.size())
 	{
