@@ -34,7 +34,7 @@ THE SOFTWARE.
 #include <string>
 
 
-#include "boost\bind.hpp"
+#include "boost/bind.hpp"
 
 // ITK includes
 #include "itkTransformFileWriter.h"
@@ -498,13 +498,13 @@ int main( int argc, char * argv[] )
 	{
 		if (initialPointsFile.size() == 0)
 		{
-			SetOutputMessage("ERROR: no file containing initial point locations specified!");
+			SetOutputMessage("ERROR: no initial point locations specified!");
 			std::cerr << "ERROR: no file containing initial point locations specified!" << std::endl;
 			boError = true;
 		}
 		if (displacedPointsFile.size() == 0)
 		{
-			SetOutputMessage("ERROR: no file containing displaced point locations specified!");
+			SetOutputMessage("ERROR: no displaced point locations specified!");
 			std::cerr << "ERROR: no file containing displaced point locations specified!" << std::endl;
 			boError = true;
 		}
