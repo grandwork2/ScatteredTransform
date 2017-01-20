@@ -66,6 +66,7 @@ namespace
 			const std::vector<double> &adDomainMinCorner, const std::vector<double> &adDomainMaxCorner,
 			const double dTolerance, unsigned int uiMaxNumLevels, const double minGridSpacing, const bool boAddLinearApproximation) = 0;
 		virtual int iSaveTransform(const char *pcTransformFileName) = 0;
+		virtual double dGetResidual(void) = 0;
 	};
 
 
@@ -73,7 +74,7 @@ namespace
 	class MBATransformND: public MBATransform {
     public:
 		typedef boost::array<double, SpaceDimension> pointType;
-		MBATransformND() {};
+		MBATransformND():residual(-1.0) {};
 
 		int iReadInitialPoints(const char *pcInitialPoints, bool boIgnoreFirstValue, bool boTransformCS) {
 			return iReadPoints(pcInitialPoints, InitialPoints, boIgnoreFirstValue, boTransformCS);
@@ -89,6 +90,7 @@ namespace
 			const std::vector<double> &adDomainMinCorner, const std::vector<double> &adDomainMaxCorner,
 			const double dTolerance, unsigned int uiMaxNumLevels, const double minGridSpacing, const bool boAddLinearApproximation);
 		int iSaveTransform(const char *pcTransformFileName);
+		virtual double dGetResidual(void) {return residual;};
 
 	private:
 		typedef std::vector<pointType> pointsVectorType;
@@ -100,6 +102,7 @@ namespace
 		pointsVectorType DisplacedPoints;
 		boost::array<boost::shared_ptr<mba::MBA<SpaceDimension>>, SpaceDimension> apCoordinateInterpolators;
 		transformPointerType transform;
+		double residual;
 
 		int iReadPoints(const char *pcFile, pointsVectorType &Points, bool boIgnoreFirstValue, bool boTransformCS);
 		int iParseLine(std::string line, pointType &p, bool boIgnoreFirstValue, bool boTransformCS);
@@ -361,9 +364,12 @@ namespace
 			size_t level = apCoordinateInterpolators.at(i)->getLevel();
 			if (level > maxLevel) maxLevel = level;
 		}
+		residual = -1;
 		for (unsigned int i = 0; i < SpaceDimension; i++)
 		{
 			apCoordinateInterpolators.at(i)->vIncreaseRefinementLevel(InitialPoints.begin(), InitialPoints.end(), apValues.at(i)->begin(), maxLevel);
+			double res = apCoordinateInterpolators.at(i)->getResidual();
+			if (res > residual) residual = res;
 		}
 
 		// configure ITK BSpline transform parameters
@@ -452,7 +458,22 @@ namespace
 		return 0;
 	}
 
+	void vShowReturnParameters(std::string returnParameterFile, double residual, std::string outputMessage)
+	{
+		std::ofstream rts;
+		rts.open(returnParameterFile.c_str() );
+		rts << "residual = " << residual << std::endl;
+		rts << "outputMessage = " << outputMessage << std::endl;
+		rts.close();
+	}
+
 };
+
+// Have to return 0 in order for error messages to be displayed in Slicer
+#define ShowMessagesAndExit(errorCode) vShowReturnParameters(returnParameterFile, residual, outputMessage); \
+	return 0
+
+#define SetOutputMessage(msg) if (outputMessage == "") outputMessage = msg
 
 int main( int argc, char * argv[] )
 {
@@ -477,17 +498,20 @@ int main( int argc, char * argv[] )
 	{
 		if (initialPointsFile.size() == 0)
 		{
+			SetOutputMessage("ERROR: no file containing initial point locations specified!");
 			std::cerr << "ERROR: no file containing initial point locations specified!" << std::endl;
 			boError = true;
 		}
 		if (displacedPointsFile.size() == 0)
 		{
+			SetOutputMessage("ERROR: no file containing displaced point locations specified!");
 			std::cerr << "ERROR: no file containing displaced point locations specified!" << std::endl;
 			boError = true;
 		}
 	}
 	if ((bsplineTransformFile.size() == 0) && (bsplineTransform.size() == 0))
 	{
+		SetOutputMessage("ERROR: no output transform file or Slicer transform specified!");
 		std::cerr << "ERROR: no output transform file or Slicer transform specified!" << std::endl;
 		boError = true;
 	}
@@ -500,6 +524,7 @@ int main( int argc, char * argv[] )
 
 	if ((uiSpaceDimension != 3) && (bsplineTransformFile.size() == 0))
 	{
+		SetOutputMessage("ERROR: You need to specify an output transform file for 1D and 2D transforms!");
 		std::cerr << "ERROR: You need to specify an output transform file for 1D and 2D transforms!" << std::endl;
 		boError = true;
 	}
@@ -507,7 +532,7 @@ int main( int argc, char * argv[] )
 	if (boError)
 	{
 		TCLAP_output.usage(commandLine);
-		return EXIT_FAILURE;
+		ShowMessagesAndExit(EXIT_FAILURE);
 	}
 
 	// perform coordinate transform?
@@ -528,8 +553,9 @@ int main( int argc, char * argv[] )
 	std::vector<double> adGridSpacing;		// grid spacing
 	if (splineGridSpacing.size() < uiSpaceDimension)
 	{
+		SetOutputMessage("ERROR: The number of grid spacing values is lower than space dimension!");
 		std::cerr << "ERROR: The number of grid spacing values is lower than space dimension!" << std::endl;
-		return EXIT_FAILURE;
+		ShowMessagesAndExit(EXIT_FAILURE);
 	}
 	for (unsigned int i = 0; i < uiSpaceDimension; i++)
 	{
@@ -543,20 +569,23 @@ int main( int argc, char * argv[] )
 	{
 		if (minCoordinates.size() < uiSpaceDimension)
 		{
+			SetOutputMessage("ERROR: The number of minimum domain coordinates is lower than space dimension!");
 			std::cerr << "ERROR: The number of minimum domain coordinates is lower than space dimension!" << std::endl;
-			return EXIT_FAILURE;
+			ShowMessagesAndExit(EXIT_FAILURE);
 		}
 		if (maxCoordinates.size() < uiSpaceDimension)
 		{
+			SetOutputMessage("ERROR: The number of maximum domain coordinates is lower than space dimension!");
 			std::cerr << "ERROR: The number of maximum domain coordinates is lower than space dimension!" << std::endl;
-			return EXIT_FAILURE;
+			ShowMessagesAndExit(EXIT_FAILURE);
 		}
 		for (unsigned int i = 0; i < uiSpaceDimension; i++)
 		{
 			if (minCoordinates[i] >= maxCoordinates[i])
 			{
+				SetOutputMessage("ERROR: The minimum domain coordinates must be smaller than the maximum domain coordinates!");
 				std::cerr << "ERROR: The minimum domain coordinates must be smaller than the maximum domain coordinates!" << std::endl;
-				return EXIT_FAILURE;
+				ShowMessagesAndExit(EXIT_FAILURE);
 			}
 			if (boTransformCS && (uiSpaceDimension == 3) && (i < 2))
 			{
@@ -597,9 +626,10 @@ int main( int argc, char * argv[] )
 		};
 	default:
 		{
-			std::cerr << "Invalid space dimension: " << uiSpaceDimension << std::endl;
+			SetOutputMessage("ERROR: Invalid space dimension! Space dimension can only be 1, 2 or 3!");
+			std::cerr << "ERROR: Invalid space dimension: " << uiSpaceDimension << std::endl;
 			std::cerr << "Space dimension can only be 1, 2 or 3!"<< std::endl;
-			return EXIT_FAILURE;
+			ShowMessagesAndExit(EXIT_FAILURE);
 		};
 	};
 
@@ -613,14 +643,16 @@ int main( int argc, char * argv[] )
 	{
 		if (pTransform->iReadInitialPoints(pcInitialPoints, boIgnoreFirstValue, boTransformCS))
 		{
-			std::cerr << "Failed to read initial points from " << pcInitialPoints << std::endl;
-			return EXIT_FAILURE;
+			SetOutputMessage("ERROR: Failed to read initial points!");
+			std::cerr << "ERROR: Failed to read initial points from " << pcInitialPoints << std::endl;
+			ShowMessagesAndExit(EXIT_FAILURE);
 		};
 
 		if (pTransform->iReadDisplacedPoints(pcDisplacedPoints, boIgnoreFirstValue, boTransformCS))
 		{
-			std::cerr << "Failed to read displaced points from " << pcDisplacedPoints << std::endl;
-			return EXIT_FAILURE;
+			SetOutputMessage("ERROR: Failed to read displaced points!");
+			std::cerr << "ERROR: Failed to read displaced points from " << pcDisplacedPoints << std::endl;
+			ShowMessagesAndExit(EXIT_FAILURE);
 		};
 	}
 	else
@@ -632,9 +664,12 @@ int main( int argc, char * argv[] )
 	if (pTransform->iCreateTransform(adGridSpacing, boDomainFromInputPoints, adDomainMinCorner, adDomainMaxCorner,
 			dTolerance, uiMaxNumLevels, minGridSpacing, boAddLinearApproximation))
 	{
-		std::cerr << "Failed to create scattered transform!" << std::endl;
-		return EXIT_FAILURE;
+		SetOutputMessage("ERROR: Failed to create scattered transform!");
+		std::cerr << "ERROR: Failed to create scattered transform!" << std::endl;
+		ShowMessagesAndExit(EXIT_FAILURE);
 	}
+
+	residual = pTransform->dGetResidual();
 
 	int ret = EXIT_SUCCESS;
 	// save transform
@@ -649,6 +684,15 @@ int main( int argc, char * argv[] )
 			ret = pTransform->iSaveTransform(bsplineTransform.c_str());
 		}
 	}
-	
-	return ret;
+
+	if (ret != EXIT_SUCCESS)
+	{
+		SetOutputMessage("ERROR: Failed to save transform!");
+	}
+	else
+	{
+		SetOutputMessage("Success!");
+	}
+
+	ShowMessagesAndExit(ret);
 }

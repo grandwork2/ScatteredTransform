@@ -537,6 +537,9 @@ class MBA {
 		// Grand Joldes: access level
 		size_t getLevel() {return level;};
 
+		// Grand Joldes: access residual
+		double getResidual() {return residual;};
+
 		// Grand Joldes: increase level
 		template <class CooIter, class ValIter>
 		void vIncreaseRefinementLevel(CooIter coo_begin, CooIter coo_end, ValIter val_begin, size_t newLevel)
@@ -546,7 +549,7 @@ class MBA {
             const ptrdiff_t n = std::distance(coo_begin, coo_end);
             std::vector<double> val(val_begin, val_begin + n);
 
-			dense_lattice_ptr->residual(coo_begin, coo_end, val.begin());
+			residual = dense_lattice_ptr->residual(coo_begin, coo_end, val.begin());
 
 			// Refine control lattice.
             for(; (level < newLevel); ++level) {
@@ -556,7 +559,7 @@ class MBA {
                 boost::shared_ptr<dense_lattice_type> f = boost::make_shared<dense_lattice_type>(
                         coo_min, coo_max, grid_size, coo_begin, coo_end, val.begin());
 
-                f->residual(coo_begin, coo_end, val.begin());
+                residual = f->residual(coo_begin, coo_end, val.begin());
                 
                 f->append_refined(*dense_lattice_ptr);
                 dense_lattice_ptr.swap(f);
@@ -568,6 +571,7 @@ class MBA {
 		size_t level;
 		point coo_min, coo_max;
 		index grid_size;
+		double residual;
 
 		boost::shared_ptr<dense_lattice_type> dense_lattice_ptr;
        
@@ -591,18 +595,18 @@ class MBA {
             dense_lattice_ptr = boost::make_shared<dense_lattice_type>(
                        cmin, cmax, grid_size, coo_begin, coo_end, val.begin(), initial);
 
-            double res = dense_lattice_ptr->residual(coo_begin, coo_end, val.begin());
+            residual = dense_lattice_ptr->residual(coo_begin, coo_end, val.begin());
 
-			if (res <= tol) return;
+			if (residual <= tol) return;
             
-            for(; (level < max_levels) && (res > tol); ++level) {
+            for(; (level < max_levels) && (residual > tol); ++level) {
                 grid_size = grid_size * 2ul - 1ul;
 
 				// create refined control lattice
                 boost::shared_ptr<dense_lattice_type> f = boost::make_shared<dense_lattice_type>(
                         cmin, cmax, grid_size, coo_begin, coo_end, val.begin());
 
-                res = f->residual(coo_begin, coo_end, val.begin());
+                residual = f->residual(coo_begin, coo_end, val.begin());
                 
                 f->append_refined(*dense_lattice_ptr);
                 dense_lattice_ptr.swap(f);

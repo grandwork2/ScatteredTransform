@@ -160,4 +160,19 @@
       <default>10</default>
     </integer>
   </parameters>
+  <parameters advanced="false">
+    <double>
+      <name>residual</name>
+      <description><![CDATA[Display residual approximation error.]]></description>
+      <label>Residual</label>
+      <channel>output</channel>
+      <default>-1</default>
+    </double>
+    <string>
+      <name>outputMessage</name>
+      <label>Output Message</label>
+      <channel>output</channel>
+      <description><![CDATA[Provides more information on the output]]></description>
+    </string>
+  </parameters>
 </executable>
