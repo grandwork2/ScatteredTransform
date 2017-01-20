@@ -161,6 +161,7 @@
     </integer>
   </parameters>
   <parameters advanced="false">
+  <label>Output information</label>
     <double>
       <name>residual</name>
       <description><![CDATA[Display residual approximation error.]]></description>
