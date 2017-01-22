@@ -32,7 +32,7 @@ THE SOFTWARE.
 #include <iostream>
 #include <fstream>
 #include <string>
-
+#include <float.h>
 
 #include "boost/bind.hpp"
 
@@ -60,8 +60,8 @@ namespace
 		MBATransform() {};
 		virtual int iReadInitialPoints(const char *pcInitialPoints, bool boIgnoreFirstValue, bool boTransformCS) = 0;
 		virtual int iReadDisplacedPoints(const char *pcDisplacedPoints, bool boIgnoreFirstValue, bool boTransformCS) = 0;
-		virtual void vGetLandmarks(const std::vector<std::vector<float>> &initialLandmarks, 
-			const std::vector<std::vector<float>> &displacedLandmarks, bool boTransformCS) = 0;
+		virtual void vGetLandmarks(const std::vector<std::vector<float> > &initialLandmarks, 
+			const std::vector<std::vector<float> > &displacedLandmarks, bool boTransformCS) = 0;
 		virtual int iCreateTransform(const std::vector<double> &adGridSpacing, bool boDomainFromInputPoints,
 			const std::vector<double> &adDomainMinCorner, const std::vector<double> &adDomainMaxCorner,
 			const double dTolerance, unsigned int uiMaxNumLevels, const double minGridSpacing, const bool boAddLinearApproximation) = 0;
@@ -83,8 +83,8 @@ namespace
 			return iReadPoints(pcDisplacedPoints, DisplacedPoints, boIgnoreFirstValue, boTransformCS);
 		};
 
-		void vGetLandmarks(const std::vector<std::vector<float>> &initialLandmarks, 
-			const std::vector<std::vector<float>> &displacedLandmarks, bool boTransformCS);
+		void vGetLandmarks(const std::vector<std::vector<float> > &initialLandmarks, 
+			const std::vector<std::vector<float> > &displacedLandmarks, bool boTransformCS);
 			
 		int iCreateTransform(const std::vector<double> &adGridSpacing, bool boDomainFromInputPoints,
 			const std::vector<double> &adDomainMinCorner, const std::vector<double> &adDomainMaxCorner,
@@ -100,7 +100,7 @@ namespace
 
 		pointsVectorType InitialPoints;
 		pointsVectorType DisplacedPoints;
-		boost::array<boost::shared_ptr<mba::MBA<SpaceDimension>>, SpaceDimension> apCoordinateInterpolators;
+		boost::array<boost::shared_ptr<mba::MBA<SpaceDimension> >, SpaceDimension> apCoordinateInterpolators;
 		transformPointerType transform;
 		double residual;
 
@@ -222,8 +222,8 @@ namespace
 	};
 
 	template <unsigned SpaceDimension>
-	void MBATransformND<SpaceDimension>::vGetLandmarks(const std::vector<std::vector<float>> &initialLandmarks, 
-		const std::vector<std::vector<float>> &displacedLandmarks, bool boTransformCS)
+	void MBATransformND<SpaceDimension>::vGetLandmarks(const std::vector<std::vector<float> > &initialLandmarks, 
+		const std::vector<std::vector<float> > &displacedLandmarks, bool boTransformCS)
 	{
 		pointType pi, pd;
 		size_t numPoints = initialLandmarks.size();
@@ -353,7 +353,7 @@ namespace
 				initialApproxFunction = boost::bind(&mba::linear_approximation<SpaceDimension>::operator (), boost::ref(linear_approx), _1);
 			}
 			else initialApproxFunction = boost::function<double(pointType)>();
-			apCoordinateInterpolators[i] = boost::make_shared<mba::MBA<SpaceDimension>>(min_coords, max_coords, aiNumGridPoints, 
+			apCoordinateInterpolators[i] = boost::make_shared<mba::MBA<SpaceDimension> >(min_coords, max_coords, aiNumGridPoints, 
 				InitialPoints.begin(), InitialPoints.end(), apValues.at(i)->begin(), uiMaxNumLevels, dTolerance, initialApproxFunction);
 		};		
 
@@ -611,17 +611,17 @@ int main( int argc, char * argv[] )
 	{ 
 	case 1: 
 		{
-			pTransform = boost::make_shared<MBATransformND<1>>();
+			pTransform = boost::make_shared<MBATransformND<1> >();
 			break;
 		};
 	case 2:
 		{
-			pTransform = boost::make_shared<MBATransformND<2>>();
+			pTransform = boost::make_shared<MBATransformND<2> >();
 			break;
 		};
 	case 3:
 		{
-			pTransform = boost::make_shared<MBATransformND<3>>();
+			pTransform = boost::make_shared<MBATransformND<3> >();
 			break;
 		};
 	default:
