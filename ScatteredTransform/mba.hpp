@@ -486,7 +486,7 @@ class MBA {
                 CooIter coo_begin, CooIter coo_end, ValIter val_begin,
                 unsigned max_levels = 8, double tol = 1e-8,
                 boost::function<double(point)> initial = boost::function<double(point)>()
-           )
+           ):level(0), residual(-1)
         {
             init(
                     coo_min, coo_max, grid,
@@ -501,7 +501,7 @@ class MBA {
                 CooRange coo, ValRange val,
                 unsigned max_levels = 8, double tol = 1e-8,
                 boost::function<double(point)> initial = boost::function<double(point)>()
-           )
+           ):level(0), residual(-1)
         {
             init(
                     coo_min, coo_max, grid,

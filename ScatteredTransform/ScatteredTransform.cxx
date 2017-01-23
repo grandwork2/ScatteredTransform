@@ -58,6 +58,7 @@ namespace
 	class MBATransform {
     public:
 		MBATransform() {};
+		virtual ~MBATransform() {};
 		virtual int iReadInitialPoints(const char *pcInitialPoints, bool boIgnoreFirstValue, bool boTransformCS) = 0;
 		virtual int iReadDisplacedPoints(const char *pcDisplacedPoints, bool boIgnoreFirstValue, bool boTransformCS) = 0;
 		virtual void vGetLandmarks(const std::vector<std::vector<float> > &initialLandmarks, 
@@ -276,7 +277,7 @@ namespace
 		}
 
 		// create value arrays for each coordinate
-		typedef mba::MBA<SpaceDimension>::point pointType;
+		typedef typename mba::MBA<SpaceDimension>::point pointType;
 		pointType min_coords, max_coords;
 		for (unsigned int i = 0; i < SpaceDimension; i++)
 		{
@@ -324,7 +325,7 @@ namespace
 		}
 
 		// Compute grid size.
-		mba::MBA<SpaceDimension>::index aiNumGridPoints;
+		typename mba::MBA<SpaceDimension>::index aiNumGridPoints;
 		for (unsigned int i = 0; i < SpaceDimension; i++)
 		{
 			unsigned int numGridPoints = 1 + (max_coords[i] - min_coords[i])/adGridSpacing[i];
@@ -373,17 +374,17 @@ namespace
 		}
 
 		// configure ITK BSpline transform parameters
-		mba::MBA<SpaceDimension>::index *pGridSize = apCoordinateInterpolators.at(0)->getGridSize();
+		typename mba::MBA<SpaceDimension>::index *pGridSize = apCoordinateInterpolators.at(0)->getGridSize();
 		
-		typedef TransformType::ParametersType ParametersType;
+		typedef typename TransformType::ParametersType ParametersType;
 
-		typedef TransformType::OriginType OriginType;
+		typedef typename TransformType::OriginType OriginType;
 		OriginType origin;
-		typedef TransformType::PhysicalDimensionsType PhysicalDimensionsType;
+		typedef typename TransformType::PhysicalDimensionsType PhysicalDimensionsType;
 		PhysicalDimensionsType dimensions;
-		typedef TransformType::MeshSizeType MeshSizeType;
+		typedef typename TransformType::MeshSizeType MeshSizeType;
 		MeshSizeType meshSize;
-		typedef TransformType::DirectionType DirectionType;
+		typedef typename TransformType::DirectionType DirectionType;
 		DirectionType direction;
 		for (unsigned int i = 0; i < SpaceDimension; i++ )
 		{
@@ -396,8 +397,6 @@ namespace
 		// Instantiate the BSpline transform
 		transform = TransformType::New();
 
-		const double *pt = transform->GetFixedParameters().data_block();
-
 		transform->SetTransformDomainOrigin( origin );
 		transform->SetTransformDomainDirection( direction );
 		transform->SetTransformDomainPhysicalDimensions( dimensions );
@@ -405,14 +404,14 @@ namespace
 
 		size_t numParameters = transform->GetNumberOfParameters();
 
-		TransformType::ParametersType parameters( numParameters );
+		ParametersType parameters( numParameters );
 		// Fill the parameters with values
 		size_t numParametersPerDimension = numParameters/SpaceDimension;
 		
 		for (unsigned int i = 0; i < SpaceDimension; i++)
 		{
 			unsigned int k = 0;
-			mba::MBA<SpaceDimension>::latticeType *pControlLattice = apCoordinateInterpolators.at(i)->getControlLattice();
+			typename mba::MBA<SpaceDimension>::latticeType *pControlLattice = apCoordinateInterpolators.at(i)->getControlLattice();
 			for(mba::detail::grid_iterator<SpaceDimension> gi(*pGridSize); gi; ++gi) 
 			{
 				double f = (*pControlLattice)(*gi);
@@ -458,22 +457,19 @@ namespace
 		return 0;
 	}
 
-	void vShowReturnParameters(std::string returnParameterFile, double residual, std::string outputMessage)
+	void vShowReturnParameters(std::string returnParameterFile, double residual)
 	{
 		std::ofstream rts;
 		rts.open(returnParameterFile.c_str() );
 		rts << "residual = " << residual << std::endl;
-		rts << "outputMessage = " << outputMessage << std::endl;
 		rts.close();
 	}
 
 };
 
 // Have to return 0 in order for error messages to be displayed in Slicer
-#define ShowMessagesAndExit(errorCode) vShowReturnParameters(returnParameterFile, residual, outputMessage); \
-	return 0
-
-#define SetOutputMessage(msg) if (outputMessage == "") outputMessage = msg
+#define ShowMessagesAndExit(errorCode) vShowReturnParameters(returnParameterFile, residual); \
+	return errorCode
 
 int main( int argc, char * argv[] )
 {
@@ -498,20 +494,17 @@ int main( int argc, char * argv[] )
 	{
 		if (initialPointsFile.size() == 0)
 		{
-			SetOutputMessage("ERROR: no initial point locations specified!");
 			std::cerr << "ERROR: no file containing initial point locations specified!" << std::endl;
 			boError = true;
 		}
 		if (displacedPointsFile.size() == 0)
 		{
-			SetOutputMessage("ERROR: no displaced point locations specified!");
 			std::cerr << "ERROR: no file containing displaced point locations specified!" << std::endl;
 			boError = true;
 		}
 	}
 	if ((bsplineTransformFile.size() == 0) && (bsplineTransform.size() == 0))
 	{
-		SetOutputMessage("ERROR: no output transform file or Slicer transform specified!");
 		std::cerr << "ERROR: no output transform file or Slicer transform specified!" << std::endl;
 		boError = true;
 	}
@@ -524,7 +517,6 @@ int main( int argc, char * argv[] )
 
 	if ((uiSpaceDimension != 3) && (bsplineTransformFile.size() == 0))
 	{
-		SetOutputMessage("ERROR: You need to specify an output transform file for 1D and 2D transforms!");
 		std::cerr << "ERROR: You need to specify an output transform file for 1D and 2D transforms!" << std::endl;
 		boError = true;
 	}
@@ -553,7 +545,6 @@ int main( int argc, char * argv[] )
 	std::vector<double> adGridSpacing;		// grid spacing
 	if (splineGridSpacing.size() < uiSpaceDimension)
 	{
-		SetOutputMessage("ERROR: The number of grid spacing values is lower than space dimension!");
 		std::cerr << "ERROR: The number of grid spacing values is lower than space dimension!" << std::endl;
 		ShowMessagesAndExit(EXIT_FAILURE);
 	}
@@ -569,13 +560,11 @@ int main( int argc, char * argv[] )
 	{
 		if (minCoordinates.size() < uiSpaceDimension)
 		{
-			SetOutputMessage("ERROR: The number of minimum domain coordinates is lower than space dimension!");
 			std::cerr << "ERROR: The number of minimum domain coordinates is lower than space dimension!" << std::endl;
 			ShowMessagesAndExit(EXIT_FAILURE);
 		}
 		if (maxCoordinates.size() < uiSpaceDimension)
 		{
-			SetOutputMessage("ERROR: The number of maximum domain coordinates is lower than space dimension!");
 			std::cerr << "ERROR: The number of maximum domain coordinates is lower than space dimension!" << std::endl;
 			ShowMessagesAndExit(EXIT_FAILURE);
 		}
@@ -583,7 +572,6 @@ int main( int argc, char * argv[] )
 		{
 			if (minCoordinates[i] >= maxCoordinates[i])
 			{
-				SetOutputMessage("ERROR: The minimum domain coordinates must be smaller than the maximum domain coordinates!");
 				std::cerr << "ERROR: The minimum domain coordinates must be smaller than the maximum domain coordinates!" << std::endl;
 				ShowMessagesAndExit(EXIT_FAILURE);
 			}
@@ -626,7 +614,6 @@ int main( int argc, char * argv[] )
 		};
 	default:
 		{
-			SetOutputMessage("ERROR: Invalid space dimension! Space dimension can only be 1, 2 or 3!");
 			std::cerr << "ERROR: Invalid space dimension: " << uiSpaceDimension << std::endl;
 			std::cerr << "Space dimension can only be 1, 2 or 3!"<< std::endl;
 			ShowMessagesAndExit(EXIT_FAILURE);
@@ -643,14 +630,12 @@ int main( int argc, char * argv[] )
 	{
 		if (pTransform->iReadInitialPoints(pcInitialPoints, boIgnoreFirstValue, boTransformCS))
 		{
-			SetOutputMessage("ERROR: Failed to read initial points!");
 			std::cerr << "ERROR: Failed to read initial points from " << pcInitialPoints << std::endl;
 			ShowMessagesAndExit(EXIT_FAILURE);
 		};
 
 		if (pTransform->iReadDisplacedPoints(pcDisplacedPoints, boIgnoreFirstValue, boTransformCS))
 		{
-			SetOutputMessage("ERROR: Failed to read displaced points!");
 			std::cerr << "ERROR: Failed to read displaced points from " << pcDisplacedPoints << std::endl;
 			ShowMessagesAndExit(EXIT_FAILURE);
 		};
@@ -664,7 +649,6 @@ int main( int argc, char * argv[] )
 	if (pTransform->iCreateTransform(adGridSpacing, boDomainFromInputPoints, adDomainMinCorner, adDomainMaxCorner,
 			dTolerance, uiMaxNumLevels, minGridSpacing, boAddLinearApproximation))
 	{
-		SetOutputMessage("ERROR: Failed to create scattered transform!");
 		std::cerr << "ERROR: Failed to create scattered transform!" << std::endl;
 		ShowMessagesAndExit(EXIT_FAILURE);
 	}
@@ -685,14 +669,6 @@ int main( int argc, char * argv[] )
 		}
 	}
 
-	if (ret != EXIT_SUCCESS)
-	{
-		SetOutputMessage("ERROR: Failed to save transform!");
-	}
-	else
-	{
-		SetOutputMessage("Success!");
-	}
-
 	ShowMessagesAndExit(ret);
 }
+

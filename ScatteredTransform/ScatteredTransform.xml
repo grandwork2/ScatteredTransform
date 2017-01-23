@@ -169,11 +169,5 @@
       <channel>output</channel>
       <default>-1</default>
     </double>
-    <string>
-      <name>outputMessage</name>
-      <label>Output Message</label>
-      <channel>output</channel>
-      <description><![CDATA[Provides more information on the output]]></description>
-    </string>
   </parameters>
 </executable>
