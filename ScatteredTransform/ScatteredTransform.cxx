@@ -37,6 +37,7 @@ THE SOFTWARE.
 #include "boost/bind.hpp"
 
 // ITK includes
+#include "itkFloatingPointExceptions.h"
 #include "itkTransformFileWriter.h"
 #include "itkAffineTransform.h"
 #include "itkBSplineTransform.h"
@@ -142,7 +143,7 @@ namespace
 		if (stream.good())
 		{
 			unsigned i;
-			for (i = 0; i < SpaceDimension - 1; i++)
+			for (i = 0; i + 1 < SpaceDimension; i++)
 			{
 				stream >> d >> c;
 				if (SpaceDimension == 3)
@@ -234,7 +235,7 @@ namespace
 			const std::vector<float> &initial_landmark = initialLandmarks.at(k);
 			const std::vector<float> &displaced_landmark = displacedLandmarks.at(k);
 			unsigned i;
-			for (i = 0; i < SpaceDimension - 1; i++)
+			for (i = 0; i + 1 < SpaceDimension; i++)
 			{
 				if (SpaceDimension == 3)
 				{
@@ -550,6 +551,14 @@ int main( int argc, char * argv[] )
 	}
 	for (unsigned int i = 0; i < uiSpaceDimension; i++)
 	{
+		if (splineGridSpacing[i] == 0)
+		{
+			std::cerr << "ERROR: The grid spacing cannot be 0!" << std::endl;
+			ShowMessagesAndExit(EXIT_FAILURE);
+		}
+	}
+	for (unsigned int i = 0; i < uiSpaceDimension; i++)
+	{
 		adGridSpacing.push_back(abs(splineGridSpacing[i]));
 	}
 
@@ -646,14 +655,21 @@ int main( int argc, char * argv[] )
 		else pTransform->vGetLandmarks(initialLandmarks, displacedLandmarks, boTransformCS);
 	};
 
+
+	bool boFloatingPointExceptionsStatus  = itk::FloatingPointExceptions::GetEnabled();
+	itk::FloatingPointExceptions::Disable();
+
 	if (pTransform->iCreateTransform(adGridSpacing, boDomainFromInputPoints, adDomainMinCorner, adDomainMaxCorner,
 			dTolerance, uiMaxNumLevels, minGridSpacing, boAddLinearApproximation))
 	{
 		std::cerr << "ERROR: Failed to create scattered transform!" << std::endl;
+		itk::FloatingPointExceptions::SetEnabled(boFloatingPointExceptionsStatus);
 		ShowMessagesAndExit(EXIT_FAILURE);
 	}
 
 	residual = pTransform->dGetResidual();
+
+	itk::FloatingPointExceptions::SetEnabled(boFloatingPointExceptionsStatus);
 
 	int ret = EXIT_SUCCESS;
 	// save transform
