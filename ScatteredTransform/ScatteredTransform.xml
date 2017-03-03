@@ -51,7 +51,7 @@
       <name>ignoreFirstValue</name>
       <longflag>ignoreFirstValue</longflag>
       <label>   Ignore first value</label>
-      <description>Igores first value in each line of the input files (which may be a node number).</description>
+      <description>Ignores first value in each line of the input files (which may be a node number).</description>
       <default>false</default>
     </boolean>
   </parameters>

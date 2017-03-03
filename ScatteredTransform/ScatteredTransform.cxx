@@ -42,6 +42,7 @@ THE SOFTWARE.
 #include "itkAffineTransform.h"
 #include "itkBSplineTransform.h"
 #include "itkCompositeTransform.h"
+#include "itkTimeProbe.h"
 
 #include "mba.hpp"
 #include "ScatteredTransformCLP.h"
@@ -474,6 +475,8 @@ namespace
 
 int main( int argc, char * argv[] )
 {
+	itk::TimeProbe clock;
+	clock.Start();
 	// parse command line options
 	PARSE_ARGS;
 
@@ -654,7 +657,11 @@ int main( int argc, char * argv[] )
 		if (boInvertTransform) pTransform->vGetLandmarks(displacedLandmarks, initialLandmarks, boTransformCS);
 		else pTransform->vGetLandmarks(initialLandmarks, displacedLandmarks, boTransformCS);
 	};
-
+	
+	clock.Stop();
+	std::cout << "Input read in " << clock.GetMean() << " s." << std::endl;
+	clock.Reset();
+	clock.Start();
 
 	bool boFloatingPointExceptionsStatus  = itk::FloatingPointExceptions::GetEnabled();
 	itk::FloatingPointExceptions::Disable();
@@ -670,6 +677,9 @@ int main( int argc, char * argv[] )
 	residual = pTransform->dGetResidual();
 
 	itk::FloatingPointExceptions::SetEnabled(boFloatingPointExceptionsStatus);
+
+	clock.Stop();
+	std::cout << "Transform computed in " << clock.GetMean() << " s." << std::endl;
 
 	int ret = EXIT_SUCCESS;
 	// save transform
