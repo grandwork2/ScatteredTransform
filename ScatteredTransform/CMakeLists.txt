@@ -10,7 +10,6 @@ set(MODULE_NAME ScatteredTransform)
 
 #-----------------------------------------------------------------------------
 set(MODULE_INCLUDE_DIRECTORIES
-  ${vtkITK_INCLUDE_DIRS}
   ${CMAKE_CURRENT_SOURCE_DIR}
   )
 

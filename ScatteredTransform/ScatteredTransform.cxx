@@ -33,8 +33,9 @@ THE SOFTWARE.
 #include <fstream>
 #include <string>
 #include <float.h>
-
-#include "boost/bind.hpp"
+#include <functional>
+#include <array>
+#include <memory>
 
 // ITK includes
 #include "itkFloatingPointExceptions.h"
@@ -76,7 +77,7 @@ namespace
 	template <unsigned SpaceDimension> 
 	class MBATransformND: public MBATransform {
     public:
-		typedef boost::array<double, SpaceDimension> pointType;
+		typedef std::array<double, SpaceDimension> pointType;
 		MBATransformND():residual(-1.0) {};
 
 		int iReadInitialPoints(const char *pcInitialPoints, bool boIgnoreFirstValue, bool boTransformCS) {
@@ -103,7 +104,7 @@ namespace
 
 		pointsVectorType InitialPoints;
 		pointsVectorType DisplacedPoints;
-		boost::array<boost::shared_ptr<mba::MBA<SpaceDimension> >, SpaceDimension> apCoordinateInterpolators;
+		std::array<std::shared_ptr<mba::MBA<SpaceDimension> >, SpaceDimension> apCoordinateInterpolators;
 		transformPointerType transform;
 		double residual;
 
@@ -279,7 +280,7 @@ namespace
 		}
 
 		// create value arrays for each coordinate
-		typedef typename mba::MBA<SpaceDimension>::point pointType;
+		typedef typename mba::MBA<SpaceDimension>::point_type pointType;
 		pointType min_coords, max_coords;
 		for (unsigned int i = 0; i < SpaceDimension; i++)
 		{
@@ -287,11 +288,11 @@ namespace
 			max_coords[i] = InitialPoints[0][i] + FLT_EPSILON;
 		}
 		typedef std::vector<double> vectValuesType;
-		boost::array<boost::shared_ptr<vectValuesType>, SpaceDimension> apValues;
+		std::array<std::shared_ptr<vectValuesType>, SpaceDimension> apValues;
 		for (unsigned int i = 0; i < SpaceDimension; i++)
 		{
 			// construct value array
-			apValues[i] = boost::make_shared<vectValuesType>();
+			apValues[i] = std::make_shared<vectValuesType>();
 			for (size_t k = 0; k < uiNumPoints; k++)
 			{
 				double dCoord = InitialPoints[k][i];
@@ -301,6 +302,18 @@ namespace
 				if (dCoord + FLT_EPSILON > max_coords[i]) max_coords[i] = dCoord + FLT_EPSILON;
 			};
 		}
+
+		std::cout << "Input points domain: min = [ ";
+		for (unsigned int i = 0; i < SpaceDimension; i++)
+		{
+			std::cout << min_coords[i] << " ";
+		}
+		std::cout << "], max = [ ";
+		for (unsigned int i = 0; i < SpaceDimension; i++)
+		{
+			std::cout << max_coords[i] << " ";
+		}
+		std::cout << "]" << std::endl;
 
 		// Algorithm setup
 		if (!boDomainFromInputPoints)
@@ -326,14 +339,33 @@ namespace
 			if (boOutside) std::cerr << "Warning: some input points are outside the transform domain!" << std::endl;
 		}
 
+		std::cout << "Transform domain: min = [ ";
+		for (unsigned int i = 0; i < SpaceDimension; i++)
+		{
+			std::cout << min_coords[i] << " ";
+		}
+		std::cout << "], max = [ ";
+		for (unsigned int i = 0; i < SpaceDimension; i++)
+		{
+			std::cout << max_coords[i] << " ";
+		}
+		std::cout << "]" << std::endl;
+
 		// Compute grid size.
-		typename mba::MBA<SpaceDimension>::index aiNumGridPoints;
+		typename mba::MBA<SpaceDimension>::index_type aiNumGridPoints;
 		for (unsigned int i = 0; i < SpaceDimension; i++)
 		{
 			unsigned int numGridPoints = 1 + (max_coords[i] - min_coords[i])/adGridSpacing[i];
 			if (numGridPoints < 2) numGridPoints = 2;
 			aiNumGridPoints[i] = numGridPoints;
 		}
+
+		std::cout << "Initial number of grid points: [ ";
+		for (unsigned int i = 0; i < SpaceDimension; i++)
+		{
+			std::cout << aiNumGridPoints[i] << " ";
+		}
+		std::cout << "]" << std::endl;
 
 		// use minGridSpacing to constrain maximum refinement level
 		double maxRatio = 0;
@@ -343,21 +375,32 @@ namespace
 			if (d > maxRatio) maxRatio = d;
 		}
 		unsigned int uiMaxLevel = log(maxRatio)/log(2.0) + 1;
-		if (uiMaxLevel < uiMaxNumLevels) uiMaxNumLevels = uiMaxLevel;
+		if (uiMaxLevel < uiMaxNumLevels)
+		{
+			uiMaxNumLevels = uiMaxLevel;
+			std::cout << "Maximum number of levels: " << uiMaxNumLevels << " (limited by minimum grid spacing)"<< std::endl;
+		}
+		else
+		{
+			std::cout << "Maximum number of levels: " << uiMaxNumLevels << std::endl;
+		}
+
 		
 		// create MBA interpolators for each coordinate
-		boost::function<double(pointType)> initialApproxFunction;
+		std::function<double(pointType)> initialApproxFunction;
 		for (unsigned int i = 0; i < SpaceDimension; i++)
 		{
 			// initial approximation
 			if (boAddLinearApproximation)
 			{
 				mba::linear_approximation<SpaceDimension> linear_approx(InitialPoints.begin(), InitialPoints.end(), apValues.at(i)->begin());
-				initialApproxFunction = boost::bind(&mba::linear_approximation<SpaceDimension>::operator (), boost::ref(linear_approx), _1);
+				initialApproxFunction = std::bind(&mba::linear_approximation<SpaceDimension>::operator (), std::ref(linear_approx), std::placeholders::_1);
 			}
-			else initialApproxFunction = boost::function<double(pointType)>();
-			apCoordinateInterpolators[i] = boost::make_shared<mba::MBA<SpaceDimension> >(min_coords, max_coords, aiNumGridPoints, 
+			else initialApproxFunction = std::function<double(pointType)>();
+			apCoordinateInterpolators[i] = std::make_shared<mba::MBA<SpaceDimension> >(min_coords, max_coords, aiNumGridPoints, 
 				InitialPoints.begin(), InitialPoints.end(), apValues.at(i)->begin(), uiMaxNumLevels, dTolerance, initialApproxFunction);
+			// Update progress
+			std::cout << "<filter-progress>" << ( i + 1.0 ) / ( SpaceDimension + 1.0 ) << "</filter-progress>" << std::endl;
 		};		
 
 		// make sure all interpolators have the same refinement level
@@ -366,6 +409,7 @@ namespace
 		{
 			size_t level = apCoordinateInterpolators.at(i)->getLevel();
 			if (level > maxLevel) maxLevel = level;
+			std::cout << "Interpolator for dimension " << i << " has "<< level << " levels" << std::endl;
 		}
 		residual = -1;
 		for (unsigned int i = 0; i < SpaceDimension; i++)
@@ -374,9 +418,10 @@ namespace
 			double res = apCoordinateInterpolators.at(i)->getResidual();
 			if (res > residual) residual = res;
 		}
+		std::cout << "Residual: " << residual << std::endl;
 
 		// configure ITK BSpline transform parameters
-		typename mba::MBA<SpaceDimension>::index *pGridSize = apCoordinateInterpolators.at(0)->getGridSize();
+		typename mba::MBA<SpaceDimension>::index_type *pGridSize = apCoordinateInterpolators.at(0)->getGridSize();
 		
 		typedef typename TransformType::ParametersType ParametersType;
 
@@ -434,7 +479,7 @@ namespace
 		PointType desiredPoint;
 		PointType outputPoint;
 		PointType outputPoint1;
-		boost::array<double, SpaceDimension> p;
+		std::array<double, SpaceDimension> p;
 
 		for (unsigned int i = 0; i<uiNumPoints; i++)
 		{
@@ -475,6 +520,9 @@ namespace
 
 int main( int argc, char * argv[] )
 {
+	// Update progress
+	std::cout << "<filter-progress>" << 0.0 << "</filter-progress>" << std::endl;
+
 	itk::TimeProbe clock;
 	clock.Start();
 	// parse command line options
@@ -606,22 +654,22 @@ int main( int argc, char * argv[] )
 	unsigned int uiMaxNumLevels = abs(maxNumLevels);		// maximum number of grid refinement
 	
 	// handle transforms for different space dimensions
-	boost::shared_ptr<MBATransform> pTransform;
+	std::shared_ptr<MBATransform> pTransform;
 	switch (uiSpaceDimension)
 	{ 
 	case 1: 
 		{
-			pTransform = boost::make_shared<MBATransformND<1> >();
+			pTransform = std::make_shared<MBATransformND<1> >();
 			break;
 		};
 	case 2:
 		{
-			pTransform = boost::make_shared<MBATransformND<2> >();
+			pTransform = std::make_shared<MBATransformND<2> >();
 			break;
 		};
 	case 3:
 		{
-			pTransform = boost::make_shared<MBATransformND<3> >();
+			pTransform = std::make_shared<MBATransformND<3> >();
 			break;
 		};
 	default:

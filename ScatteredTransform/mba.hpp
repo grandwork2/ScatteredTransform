@@ -29,7 +29,7 @@ THE SOFTWARE.
  * \file   mba/mba.hpp
  * \author Denis Demidov <dennis.demidov@gmail.com>
  * \brief  Multilevel B-spline interpolation.
- *
+ * 
  * \changes Grand Joldes <grandwork2@yahoo.com>: 
  *			Removed the sparse control lattice and initial approximation.
  *			Removed the parent class of control_lattice_dense.
@@ -40,52 +40,122 @@ THE SOFTWARE.
  */
 
 #include <iostream>
+#include <iomanip>
+#include <vector>
+#include <memory>
+#include <algorithm>
+#include <numeric>
+#include <functional>
+#include <type_traits>
+#include <utility>
+#include <iterator>
+#include <stdexcept>
 
-#include "boost/array.hpp"
-#include "boost/multi_array.hpp"
-#include "boost/range/algorithm.hpp"
-#include "boost/range/numeric.hpp"
-#include "boost/iterator/transform_iterator.hpp"
-#include "boost/type_traits.hpp"
-#include "boost/shared_ptr.hpp"
-#include "boost/make_shared.hpp"
-#include "boost/numeric/ublas/matrix.hpp"
-#include "boost/numeric/ublas/lu.hpp"
-#include "boost/function.hpp"
+#include <cmath>
+#include <cassert>
 
 namespace mba {
+
+using std::ptrdiff_t;
+using std::size_t;
+
+template <int N>
+using point = std::array<double, N>;
+
+template <int N>
+using index = std::array<size_t, N>;
+
 namespace detail {
 
+// Compile-time N^M
 template <size_t N, size_t M>
-struct power : boost::integral_constant<size_t, N * power<N, M-1>::value> {};
+struct power : std::integral_constant<size_t, N * power<N, M-1>::value> {};
 
 template <size_t N>
-struct power<N, 0> : boost::integral_constant<size_t, 1> {};
+struct power<N, 0> : std::integral_constant<size_t, 1> {};
+
+// N-dimensional dense matrix
+template <class T, int N>
+class multi_array {
+    static_assert(N > 0, "Wrong number of dimensions");
+
+    public:
+        multi_array() {}
+
+        multi_array(index<N> n) {
+            init(n);
+        }
+
+        void resize(index<N> n) {
+            init(n);
+        }
+
+        size_t size() const {
+            return buf.size();
+        }
+
+        T operator()(index<N> i) const {
+            return buf[idx(i)];
+        }
+
+        T& operator()(index<N> i) {
+            return buf[idx(i)];
+        }
+
+        T operator[](size_t i) const {
+            return buf[i];
+        }
+
+        T& operator[](size_t i) {
+            return buf[i];
+        }
+
+        const T* data() const {
+            return buf.data();
+        }
+
+        T* data() {
+            return buf.data();
+        }
+    private:
+        std::array<int, N> stride;
+        std::vector<T>  buf;
+
+        void init(index<N> n) {
+            size_t s = 1;
+
+            for(int d = N-1; d >= 0; --d) {
+                stride[d] = s;
+                s *= n[d];
+            }
+
+            buf.resize(s);
+        }
+
+        size_t idx(index<N> i) const {
+            size_t p = 0;
+            for(int d = 0; d < N; ++d)
+                p += stride[d] * i[d];
+            return p;
+        }
+};
 
 /// N-dimensional grid iterator (nested loop with variable depth).
 template <unsigned NDim>
 class grid_iterator {
     public:
-        typedef boost::array<size_t, NDim> index;
+        explicit grid_iterator(const index<NDim> &dims)
+            : N(dims), i{0}, done(i == N), idx(0) { }
 
-        explicit grid_iterator(const boost::array<size_t, NDim> &dims)
-            : N(dims), idx(0)
-        {
-            boost::fill(i, 0);
-            done = (i == N);
-        }
-
-        explicit grid_iterator(size_t dim) : idx(0) {
-            boost::fill(N, dim);
-            boost::fill(i, 0);
-            done = (0 == dim);
+        explicit grid_iterator(size_t dim) : i{0}, idx(0), done(dim == 0) {
+            for(auto &v : N)  v = dim;
         }
 
         size_t operator[](size_t d) const {
             return i[d];
         }
 
-        const index& operator*() const {
+        const index<NDim>& operator*() const {
             return i;
         }
 
@@ -95,7 +165,7 @@ class grid_iterator {
 
         grid_iterator& operator++() {
             done = true;
-			for(size_t d = 0; d<NDim; d++) {  // Grand Joldes: changed order
+            for (size_t d = 0; d < NDim; d++) {  // Grand Joldes: changed order
                 if (++i[d] < N[d]) {
                     done = false;
                     break;
@@ -111,26 +181,26 @@ class grid_iterator {
         operator bool() const { return !done; }
 
     private:
-        index N, i;
+        index<NDim> N, i;
         bool  done;
         size_t idx;
 };
 
 template <typename T, size_t N>
-boost::array<T, N> operator+(boost::array<T, N> a, const boost::array<T, N> &b) {
-    boost::transform(a, b, boost::begin(a), std::plus<T>());
+std::array<T, N> operator+(std::array<T, N> a, const std::array<T, N> &b) {
+    for(size_t i = 0; i < N; ++i) a[i] += b[i];
     return a;
 }
 
 template <typename T, size_t N, typename C>
-boost::array<T, N> operator-(boost::array<T, N> a, C b) {
-    boost::transform(a, boost::begin(a), std::bind2nd(std::minus<T>(), b));
+std::array<T, N> operator-(std::array<T, N> a, C b) {
+    for(auto &v : a) v -= b;
     return a;
 }
 
 template <typename T, size_t N, typename C>
-boost::array<T, N> operator*(boost::array<T, N> a, C b) {
-    boost::transform(a, boost::begin(a), std::bind2nd(std::multiplies<T>(), b));
+std::array<T, N> operator*(std::array<T, N> a, C b) {
+    for(auto &v : a) v *= b;
     return a;
 }
 
@@ -155,7 +225,7 @@ inline double Bspline(size_t k, double t) {
 
 // Checks if p is between lo and hi
 template <typename T, size_t N>
-bool boxed(const boost::array<T,N> &lo, const boost::array<T,N> &p, const boost::array<T,N> &hi) {
+bool boxed(const std::array<T,N> &lo, const std::array<T,N> &p, const std::array<T,N> &hi) {
     for(unsigned i = 0; i < N; ++i) {
         if (p[i] < lo[i] || p[i] > hi[i]) return false;
     }
@@ -166,64 +236,77 @@ inline double safe_divide(double a, double b) {
     return b == 0.0 ? 0.0 : a / b;
 }
 
+
 template <unsigned NDim>
 class control_lattice_dense {
     public:
-		typedef boost::array<size_t, NDim> index;
-        typedef boost::array<double, NDim> point;
-		typedef boost::multi_array<double, NDim> latticeType;
-
         template <class CooIter, class ValIter>
         control_lattice_dense(
-                const point &coo_min, const point &coo_max, index grid_size,
-                CooIter coo_begin, CooIter coo_end, ValIter val_begin, 
-				boost::function<double(point)> initial = boost::function<double(point)>() 
+                const point<NDim> &coo_min, const point<NDim> &coo_max, index<NDim> grid_size,
+                CooIter coo_begin, CooIter coo_end, ValIter val_begin,
+                std::function<double(point<NDim>)> initial = std::function<double(point<NDim>)>()
                 ) : cmin(coo_min), cmax(coo_max), grid(grid_size)
         {
+            static_assert(
+                    std::is_same<
+                        typename std::iterator_traits<CooIter>::iterator_category,
+                        std::random_access_iterator_tag
+                        >::value,
+                    "CooIter should be a random access iterator");
+            static_assert(
+                    std::is_same<
+                        typename std::iterator_traits<ValIter>::iterator_category,
+                        std::random_access_iterator_tag
+                        >::value,
+                    "ValIter should be a random access iterator");
+
             for(unsigned i = 0; i < NDim; ++i) {
                 hinv[i] = (grid[i] - 1) / (cmax[i] - cmin[i]);
                 cmin[i] -= 1 / hinv[i];
                 grid[i] += 2;
             }
-			phi.resize(grid);
+            phi.resize(grid);
+            std::fill(phi.data(), phi.data() + phi.size(), 0.0);
 
-			// Grand Joldes: init control grid values 
-			if (initial)
-			{
-				point s;
-				for(grid_iterator<NDim> d(grid); d; ++d) {
-					for(unsigned k = 0; k < NDim; ++k) 
-					{
-						s[k] = cmin[k] + d[k]/hinv[k];
-					}
-					phi(*d) = initial(s);
-				}
-				residual(coo_begin, coo_end, val_begin); // substract values computed using current grid from interpolated values
+            // Grand Joldes: init control grid values 
+            if (initial)
+            {
+                point<NDim> s;
+                for (grid_iterator<NDim> d(grid); d; ++d) {
+                    for (unsigned k = 0; k < NDim; ++k)
+                    {
+                        s[k] = cmin[k] + d[k] / hinv[k];
+                    }
+                    phi(*d) = initial(s);
+                }
+                residual(coo_begin, coo_end, val_begin); // substract values computed using current grid from interpolated values
             }
 
-            latticeType delta(grid);
-            latticeType omega(grid);
-			latticeType initial_phi(grid);
+            multi_array<double, NDim> delta(grid);
+            multi_array<double, NDim> omega(grid);
 
-            std::fill(delta.data(), delta.data() + delta.num_elements(), 0.0);
-            std::fill(omega.data(), omega.data() + omega.num_elements(), 0.0);
+            std::fill(delta.data(), delta.data() + delta.size(), 0.0);
+            std::fill(omega.data(), omega.data() + omega.size(), 0.0);
 
-            CooIter p = coo_begin;
-            ValIter v = val_begin;
+            ptrdiff_t n = std::distance(coo_begin, coo_end);
+            size_t    m = phi.size();
 
-            for(; p != coo_end; ++p, ++v) {
-                if (!boxed(coo_min, *p, coo_max)) continue;
+            for(ptrdiff_t l = 0; l < n; ++l) {
+                auto p = coo_begin[l];
+                auto v = val_begin[l];
 
-                index i;
-                point s;
+                if (!boxed(coo_min, p, coo_max)) continue;
+
+                index<NDim> i;
+                point<NDim> s;
 
                 for(unsigned d = 0; d < NDim; ++d) {
-                    double u = ((*p)[d] - cmin[d]) * hinv[d];
-                    i[d] = (size_t)floor(u) - 1;  // Grand Joldes: added conversion to size_t
+                    double u = (p[d] - cmin[d]) * hinv[d];
+                    i[d] = (size_t)floor(u) - 1;
                     s[d] = u - floor(u);
                 }
 
-                boost::array< double, power<4, NDim>::value > w;
+                std::array< double, power<4, NDim>::value > w;
                 double sum_w2 = 0.0;
 
                 for(grid_iterator<NDim> d(4); d; ++d) {
@@ -237,46 +320,38 @@ class control_lattice_dense {
                 for(grid_iterator<NDim> d(4); d; ++d) {
                     double w1  = w[d.position()];
                     double w2  = w1 * w1;
-                    double dphi = (*v) * w1 / sum_w2;
+                    double phi = v * w1 / sum_w2;
 
-                    index j = i + (*d);
+                    index<NDim> j = i + (*d);
 
-                    delta(j) += w2 * dphi;
+                    delta(j) += w2 * phi;
                     omega(j) += w2;
                 }
             }
 
-			// Grand Joldes: save initial grid
-			if (initial) 
-			{
-				restore_values(coo_begin, coo_end, val_begin); // restore interpolated values
-				initial_phi = phi;
-			}
-
-            std::transform(
-                    delta.data(), delta.data() + delta.num_elements(),
-                    omega.data(), phi.data(), safe_divide
-                    );
-
-			// Grand Joldes: handle initial grid
-			if (initial) 
-			{
-				std::transform(
-						phi.data(), phi.data() + phi.num_elements(),
-						initial_phi.data(), phi.data(), std::plus<double>()
-						);
-			}
+            // Grand Joldes: handle initial grid
+            if (initial)
+            {
+                restore_values(coo_begin, coo_end, val_begin); // restore interpolated values
+                for (ptrdiff_t i = 0; i < m; ++i) {
+                    phi[i] += safe_divide(delta[i], omega[i]);
+                }
+            }
+            else
+            {
+                for (ptrdiff_t i = 0; i < m; ++i) {
+                    phi[i] = safe_divide(delta[i], omega[i]);
+                }
+            }
         }
 
-        double operator()(const point &p) const {
-            index i;
-            point s;
-
-			if (!boxed(cmin, p, cmax)) return 0; // Grand Joldes: check limits
+        double operator()(const point<NDim> &p) const {
+            index<NDim> i;
+            point<NDim> s;
 
             for(unsigned d = 0; d < NDim; ++d) {
                 double u = (p[d] - cmin[d]) * hinv[d];
-                i[d] = (size_t)floor(u) - 1;
+                i[d] = floor(u) - 1;
                 s[d] = u - floor(u);
             }
 
@@ -292,15 +367,28 @@ class control_lattice_dense {
             return f;
         }
 
-		template <class CooIter, class ValIter>
+        void report(std::ostream &os) const {
+            std::ios_base::fmtflags ff(os.flags());
+            auto fp = os.precision();
+
+            os << "dense  [" << grid[0];
+            for(unsigned i = 1; i < NDim; ++i)
+                os << ", " << grid[i];
+            os << "] (" << phi.size() * sizeof(double) << " bytes)";
+
+            os.flags(ff);
+            os.precision(fp);
+        }
+
+        template <class CooIter, class ValIter>
         double residual(CooIter coo_begin, CooIter coo_end, ValIter val_begin) const {
             double res = 0.0;
 
             CooIter p = coo_begin;
             ValIter v = val_begin;
 
-            for(; p != coo_end; ++p, ++v) {
-				if (!boxed(cmin, *p, cmax)) continue;
+            for (; p != coo_end; ++p, ++v) {
+                if (!boxed(cmin, *p, cmax)) continue;
                 (*v) -= (*this)(*p);
                 res = std::max(res, std::abs(*v));
             }
@@ -308,36 +396,20 @@ class control_lattice_dense {
             return res;
         }
 
-		// Grand Joldes: use this to restore interpolated values after a call to residual()
-		template <class CooIter, class ValIter>
+        // Grand Joldes: use this to restore interpolated values after a call to residual()
+        template <class CooIter, class ValIter>
         void restore_values(CooIter coo_begin, CooIter coo_end, ValIter val_begin) const {
             CooIter p = coo_begin;
-			ValIter v = val_begin;
-            
-            for(; p != coo_end; ++p, ++v) {
-				if (!boxed(cmin, *p, cmax)) continue;
+            ValIter v = val_begin;
+
+            for (; p != coo_end; ++p, ++v) {
+                if (!boxed(cmin, *p, cmax)) continue;
                 (*v) += (*this)(*p);
             }
         }
 
-        void report(std::ostream &os) const {
-            os << "dense  [" << grid[0];
-            for(unsigned i = 1; i < NDim; ++i)
-                os << ", " << grid[i];
-			os << "] (" << phi.num_elements() * sizeof(double) << " bytes)" << std::endl;
-
-			// Grand Joldes: print coefficients
-			os << "Coefficients: ";
-			for(grid_iterator<NDim> i(grid); i; ++i) 
-			{
-                double f = phi(*i);
-				os << f << "  ";
-			}
-			os << std::endl;
-        }
-
         void append_refined(const control_lattice_dense &r) {
-            static const boost::array<double, 5> s = {
+            static const std::array<double, 5> s = {
                 0.125, 0.500, 0.750, 0.500, 0.125
             };
 
@@ -347,7 +419,7 @@ class control_lattice_dense {
                 if (f == 0.0) continue;
 
                 for(grid_iterator<NDim> d(5); d; ++d) {
-                    index j;
+                    index<NDim> j;
                     bool skip = false;
                     for(unsigned k = 0; k < NDim; ++k) {
                         j[k] = 2 * i[k] + d[k] - 3;
@@ -367,18 +439,24 @@ class control_lattice_dense {
             }
         }
 
-		// Grand Joldes: access grid size
-		index* getGridSize() { return &grid;};
+        double fill_ratio() const {
+            size_t total    = phi.size();
+            size_t nonzeros = total - std::count(phi.data(), phi.data() + total, 0.0);
 
-		// Grand Joldes: access control lattice
-		latticeType* getControlLattice() { return &phi;};
-      
+            return static_cast<double>(nonzeros) / total;
+        }
+
+        // Grand Joldes: access grid size
+        index<NDim>* getGridSize() { return &grid; };
+
+        // Grand Joldes: access control lattice
+        multi_array<double, NDim>* getControlLattice() { return &phi; };
+
     private:
-        point cmin, cmax, hinv;
-        index grid;
+        point<NDim> cmin, cmax, hinv;
+        index<NDim> grid;
 
-        latticeType phi;
-
+        multi_array<double, NDim> phi;
 };
 
 } // namespace detail
@@ -386,25 +464,19 @@ class control_lattice_dense {
 template <unsigned NDim>
 class linear_approximation {
     public:
-        typedef boost::array<double, NDim> point;
-		typedef boost::array<double, NDim+1> arrayCoefficientsType;
-
         template <class CooIter, class ValIter>
         linear_approximation(CooIter coo_begin, CooIter coo_end, ValIter val_begin)
         {
-            namespace ublas = boost::numeric::ublas;
-
             size_t n = std::distance(coo_begin, coo_end);
+            for(auto &v : C) v = 0.0;
 
             if (n <= NDim) {
                 // Not enough points to get a unique plane
-                boost::fill(C, 0.0);
                 C[NDim] = std::accumulate(val_begin, val_begin + n, 0.0) / n;
                 return;
             }
 
-            ublas::matrix<double> A(NDim+1, NDim+1); A.clear();
-            ublas::vector<double> f(NDim+1);         f.clear();
+            double A[NDim + 1][NDim + 1] = {0};
 
             CooIter p = coo_begin;
             ValIter v = val_begin;
@@ -413,41 +485,65 @@ class linear_approximation {
 
             // Solve least-squares problem to get approximation with a plane.
             for(; p != coo_end; ++p, ++v, ++n) {
-                boost::array<double, NDim+1> x;
-                boost::copy(*p, boost::begin(x));
+                double x[NDim+1];
+                for(unsigned i = 0; i < NDim; ++i) x[i] = (*p)[i];
                 x[NDim] = 1.0;
 
                 for(unsigned i = 0; i <= NDim; ++i) {
                     for(unsigned j = 0; j <= NDim; ++j) {
-                        A(i,j) += x[i] * x[j];
+                        A[i][j] += x[i] * x[j];
                     }
-                    f(i) += x[i] * (*v);
+                    C[i] += x[i] * (*v);
                 }
 
                 sum_val += (*v);
             }
 
-            ublas::permutation_matrix<size_t> pm(NDim+1);
-            ublas::lu_factorize(A, pm);
+            // Perform LU-factorization of A in-place
+            for(unsigned k = 0; k <= NDim; ++k) {
+                if (A[k][k] == 0)
+                {
+                    // singular matrix
+                    for (unsigned i = 0; i < NDim; ++i) C[i] = 0.0;
+                    C[NDim] = sum_val / n;
+                    return;
+                }
 
-            bool singular = false;
-            for(unsigned i = 0; i <= NDim; ++i) {
-                if (A(i,i) == 0.0) {
-                    singular = true;
-                    break;
+                double d = 1 / A[k][k];
+                for(unsigned i = k+1; i <= NDim; ++i) {
+                    A[i][k] *= d;
+                    for(unsigned j = k+1; j <= NDim; ++j)
+                        A[i][j] -= A[i][k] * A[k][j];
+                }
+                A[k][k] = d;
+            }
+
+            for (unsigned i = 0; i <= NDim; ++i)
+            {
+                if (A[i][i] == 0.0)
+                {
+                    // singular matrix
+                    for (unsigned i = 0; i < NDim; ++i) C[i] = 0.0;
+                    C[NDim] = sum_val / n;
+                    return;
                 }
             }
 
-            if (singular) {
-                boost::fill(C, 0.0);
-                C[NDim] = sum_val / n;
-            } else {
-                ublas::lu_substitute(A, pm, f);
-                for(unsigned i = 0; i <= NDim; ++i) C[i] = f(i);
+            // Lower triangular solve:
+            for(unsigned i = 0; i <= NDim; ++i) {
+                for(unsigned j = 0; j < i; ++j)
+                    C[i] -= A[i][j] * C[j];
+            }
+
+            // Upper triangular solve:
+            for(unsigned i = NDim+1; i --> 0; ) {
+                for(unsigned j = i+1; j <= NDim; ++j)
+                    C[i] -= A[i][j] * C[j];
+                C[i] *= A[i][i];
             }
         }
 
-        double operator()(const point &p) const {
+        double operator()(const point<NDim> &p) const {
             double f = C[NDim];
 
             for(unsigned i = 0; i < NDim; ++i)
@@ -456,37 +552,35 @@ class linear_approximation {
             return f;
         }
 
-		// Grand Joldes: print coefficients
-		friend std::ostream& operator<<(std::ostream &os, const linear_approximation &La) {
+        // Grand Joldes: print coefficients
+        friend std::ostream& operator<<(std::ostream& os, const linear_approximation& La) {
             os << "Linear approximation coefficients: ";
-			for(unsigned i = 0; i <= NDim; ++i)
+            for (unsigned i = 0; i <= NDim; ++i)
             {
-                os << La.C[i] << "  "; 
+                os << La.C[i] << "  ";
             }
-			os << std::endl;
+            os << std::endl;
             return os;
         }
 
-		// Grand Joldes: access coefficients
-		arrayCoefficientsType *getCoefficients() {return &C;};
     private:
-        arrayCoefficientsType C;
+        std::array<double, NDim+1> C;
 };
 
 template <unsigned NDim>
 class MBA {
     public:
-        typedef boost::array<size_t, NDim> index;
-        typedef boost::array<double, NDim> point;
-		typedef boost::multi_array<double, NDim> latticeType;
+        typedef detail::multi_array<double, NDim> latticeType;
+        typedef index<NDim> index_type;
+        typedef point<NDim> point_type;
 
         template <class CooIter, class ValIter>
         MBA(
-                const point &coo_min, const point &coo_max, const index grid,
+                const point<NDim> &coo_min, const point<NDim> &coo_max, index<NDim> grid,
                 CooIter coo_begin, CooIter coo_end, ValIter val_begin,
                 unsigned max_levels = 8, double tol = 1e-8,
-                boost::function<double(point)> initial = boost::function<double(point)>()
-           ):level(0), residual(-1)
+                std::function<double(point<NDim>)> initial = std::function<double(point<NDim>)>()
+           )
         {
             init(
                     coo_min, coo_max, grid,
@@ -497,20 +591,20 @@ class MBA {
 
         template <class CooRange, class ValRange>
         MBA(
-                const point &coo_min, const point &coo_max, const index grid,
+                const point<NDim> &coo_min, const point<NDim> &coo_max, index<NDim> grid,
                 CooRange coo, ValRange val,
                 unsigned max_levels = 8, double tol = 1e-8,
-                boost::function<double(point)> initial = boost::function<double(point)>()
-           ):level(0), residual(-1)
+                std::function<double(point<NDim>)> initial = std::function<double(point<NDim>)>()
+           )
         {
             init(
                     coo_min, coo_max, grid,
-                    boost::begin(coo), boost::end(coo), boost::begin(val),
+                    std::begin(coo), std::end(coo), std::begin(val),
                     max_levels, tol, initial
                 );
         }
 
-        double operator()(const point &p) const {
+        double operator()(const point<NDim> &p) const {
             double f = (*dense_lattice_ptr)(p);
             return f;
         }
@@ -521,93 +615,91 @@ class MBA {
             return os;
         }
 
+        // Grand Joldes: access grid size
+        index_type* getGridSize()
+        {
+            return dense_lattice_ptr->getGridSize();
+        }
 
-		// Grand Joldes: access grid size
-		index* getGridSize()
-		{
-			return dense_lattice_ptr->getGridSize();
-		}
+        // Grand Joldes: access control lattice
+        latticeType* getControlLattice()
+        {
+            return dense_lattice_ptr->getControlLattice();
+        }
 
-		// Grand Joldes: access control lattice
-		latticeType* getControlLattice() 
-		{
-			return dense_lattice_ptr->getControlLattice();
-		}
+        // Grand Joldes: access level
+        size_t getLevel() { return level; };
 
-		// Grand Joldes: access level
-		size_t getLevel() {return level;};
+        // Grand Joldes: access residual
+        double getResidual() { return residual; };
 
-		// Grand Joldes: access residual
-		double getResidual() {return residual;};
-
-		// Grand Joldes: increase level
-		template <class CooIter, class ValIter>
-		void vIncreaseRefinementLevel(CooIter coo_begin, CooIter coo_end, ValIter val_begin, size_t newLevel)
-		{
-			using namespace mba::detail;
- 
-            const ptrdiff_t n = std::distance(coo_begin, coo_end);
-            std::vector<double> val(val_begin, val_begin + n);
-
-			residual = dense_lattice_ptr->residual(coo_begin, coo_end, val.begin());
-
-			// Refine control lattice.
-            for(; (level < newLevel); ++level) {
-                grid_size = grid_size * 2ul - 1ul;
-
-				// create refined control lattice
-                boost::shared_ptr<dense_lattice_type> f = boost::make_shared<dense_lattice_type>(
-                        coo_min, coo_max, grid_size, coo_begin, coo_end, val.begin());
-
-                residual = f->residual(coo_begin, coo_end, val.begin());
-                
-                f->append_refined(*dense_lattice_ptr);
-                dense_lattice_ptr.swap(f);
-            }
-		}
-
-    private:
-		typedef detail::control_lattice_dense<NDim> dense_lattice_type;
-		size_t level;
-		point coo_min, coo_max;
-		index grid_size;
-		double residual;
-
-		boost::shared_ptr<dense_lattice_type> dense_lattice_ptr;
-       
+        // Grand Joldes: increase level
         template <class CooIter, class ValIter>
-        void init(
-                const point &cmin, const point &cmax, const index grid,
-                CooIter coo_begin, CooIter coo_end, ValIter val_begin,
-                unsigned max_levels, double tol,
-                boost::function<double(point)> initial
-                )
+        void vIncreaseRefinementLevel(CooIter coo_begin, CooIter coo_end, ValIter val_begin, size_t newLevel)
         {
             using namespace mba::detail;
-			coo_min = cmin; 
-			coo_max = cmax; 
-			grid_size = grid;
+
             const ptrdiff_t n = std::distance(coo_begin, coo_end);
             std::vector<double> val(val_begin, val_begin + n);
-
-			level = 1;
-            // Create dense control lattice.
-            dense_lattice_ptr = boost::make_shared<dense_lattice_type>(
-                       cmin, cmax, grid_size, coo_begin, coo_end, val.begin(), initial);
 
             residual = dense_lattice_ptr->residual(coo_begin, coo_end, val.begin());
 
-			if (residual <= tol) return;
-            
-            for(; (level < max_levels) && (residual > tol); ++level) {
+            // Refine control lattice.
+            for (; (level < newLevel); ++level) {
                 grid_size = grid_size * 2ul - 1ul;
 
-				// create refined control lattice
-                boost::shared_ptr<dense_lattice_type> f = boost::make_shared<dense_lattice_type>(
-                        cmin, cmax, grid_size, coo_begin, coo_end, val.begin());
+                // create refined control lattice
+                std::shared_ptr<dense_lattice_type> f = std::make_shared<dense_lattice_type>(
+                    coo_min, coo_max, grid_size, coo_begin, coo_end, val.begin());
 
                 residual = f->residual(coo_begin, coo_end, val.begin());
-                
+
+                f->append_refined(*dense_lattice_ptr);
+                dense_lattice_ptr.swap(f);
+            }
+        }
+    private:
+        typedef detail::control_lattice_dense<NDim>  dense_lattice_type;
+        size_t level;
+        point<NDim> coo_min, coo_max;
+        index<NDim> grid_size;
+        double residual;
+
+        std::shared_ptr<dense_lattice_type> dense_lattice_ptr;
+
+        template <class CooIter, class ValIter>
+        void init(
+                const point<NDim> &cmin, const point<NDim> &cmax, index<NDim> grid,
+                CooIter coo_begin, CooIter coo_end, ValIter val_begin,
+                unsigned max_levels, double tol,
+                std::function<double(point<NDim>)> initial
+                )
+        {
+            using namespace mba::detail;
+            coo_min = cmin;
+            coo_max = cmax;
+            grid_size = grid;
+            const ptrdiff_t n = std::distance(coo_begin, coo_end);
+            std::vector<double> val(val_begin, val_begin + n);
+
+            level = 1;
+            // Create dense control lattice.
+            dense_lattice_ptr = std::make_shared<dense_lattice_type>(
+                cmin, cmax, grid_size, coo_begin, coo_end, val.begin(), initial);
+
+            residual = dense_lattice_ptr->residual(coo_begin, coo_end, val.begin());
+
+            if (residual <= tol) return;
+
+            for (; (level < max_levels) && (residual > tol); ++level) {
+                grid_size = grid_size * 2ul - 1ul;
+
+                // create refined control lattice
+                std::shared_ptr<dense_lattice_type> f = std::make_shared<dense_lattice_type>(
+                    cmin, cmax, grid_size, coo_begin, coo_end, val.begin());
+
+                residual = f->residual(coo_begin, coo_end, val.begin());
+
                 f->append_refined(*dense_lattice_ptr);
                 dense_lattice_ptr.swap(f);
             }
