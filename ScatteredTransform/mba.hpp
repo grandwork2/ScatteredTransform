@@ -80,7 +80,7 @@ class multi_array {
     static_assert(N > 0, "Wrong number of dimensions");
 
     public:
-        multi_array() {}
+        multi_array(): stride(), buf() {}
 
         multi_array(index<N> n) {
             init(n);
@@ -245,7 +245,7 @@ class control_lattice_dense {
                 const point<NDim> &coo_min, const point<NDim> &coo_max, index<NDim> grid_size,
                 CooIter coo_begin, CooIter coo_end, ValIter val_begin,
                 std::function<double(point<NDim>)> initial = std::function<double(point<NDim>)>()
-                ) : cmin(coo_min), cmax(coo_max), grid(grid_size)
+                ) : cmin(coo_min), cmax(coo_max), grid(grid_size), residual( 0.0 )
         {
             static_assert(
                     std::is_same<
@@ -279,7 +279,7 @@ class control_lattice_dense {
                     }
                     phi(*d) = initial(s);
                 }
-                residual(coo_begin, coo_end, val_begin); // substract values computed using current grid from interpolated values
+                update_residual(coo_begin, coo_end, val_begin); // substract values computed using current grid from interpolated values
             }
 
             multi_array<double, NDim> delta(grid);
@@ -343,6 +343,7 @@ class control_lattice_dense {
                     phi[i] = safe_divide(delta[i], omega[i]);
                 }
             }
+            residual = update_residual(coo_begin, coo_end, val_begin); // substract values computed using current grid from interpolated values
         }
 
         double operator()(const point<NDim> &p) const {
@@ -378,34 +379,6 @@ class control_lattice_dense {
 
             os.flags(ff);
             os.precision(fp);
-        }
-
-        template <class CooIter, class ValIter>
-        double residual(CooIter coo_begin, CooIter coo_end, ValIter val_begin) const {
-            double res = 0.0;
-
-            CooIter p = coo_begin;
-            ValIter v = val_begin;
-
-            for (; p != coo_end; ++p, ++v) {
-                if (!boxed(cmin, *p, cmax)) continue;
-                (*v) -= (*this)(*p);
-                res = std::max(res, std::abs(*v));
-            }
-
-            return res;
-        }
-
-        // Grand Joldes: use this to restore interpolated values after a call to residual()
-        template <class CooIter, class ValIter>
-        void restore_values(CooIter coo_begin, CooIter coo_end, ValIter val_begin) const {
-            CooIter p = coo_begin;
-            ValIter v = val_begin;
-
-            for (; p != coo_end; ++p, ++v) {
-                if (!boxed(cmin, *p, cmax)) continue;
-                (*v) += (*this)(*p);
-            }
         }
 
         void append_refined(const control_lattice_dense &r) {
@@ -452,10 +425,39 @@ class control_lattice_dense {
         // Grand Joldes: access control lattice
         multi_array<double, NDim>* getControlLattice() { return &phi; };
 
+        double getResidual() { return residual; };
+
     private:
+        template <class CooIter, class ValIter>
+        double update_residual(CooIter coo_begin, CooIter coo_end, ValIter val_begin) const {
+            double res = 0.0;
+
+            CooIter p = coo_begin;
+            ValIter v = val_begin;
+
+            for (; p != coo_end; ++p, ++v) {
+                if (!boxed(cmin, *p, cmax)) continue;
+                (*v) -= (*this)(*p);
+                res = std::max(res, std::abs(*v));
+            }
+            return res;
+        }
+
+        // Grand Joldes: use this to restore interpolated values after a call to update_residual()
+        template <class CooIter, class ValIter>
+        void restore_values(CooIter coo_begin, CooIter coo_end, ValIter val_begin) const {
+            CooIter p = coo_begin;
+            ValIter v = val_begin;
+
+            for (; p != coo_end; ++p, ++v) {
+                if (!boxed(cmin, *p, cmax)) continue;
+                (*v) += (*this)(*p);
+            }
+        }
+
         point<NDim> cmin, cmax, hinv;
         index<NDim> grid;
-
+        double residual;
         multi_array<double, NDim> phi;
 };
 
@@ -567,10 +569,12 @@ class linear_approximation {
         std::array<double, NDim+1> C;
 };
 
+using namespace mba::detail;
+
 template <unsigned NDim>
 class MBA {
     public:
-        typedef detail::multi_array<double, NDim> latticeType;
+        typedef multi_array<double, NDim> latticeType;
         typedef index<NDim> index_type;
         typedef point<NDim> point_type;
 
@@ -616,54 +620,37 @@ class MBA {
         }
 
         // Grand Joldes: access grid size
-        index_type* getGridSize()
+        index_type* getGridSize() const
         {
             return dense_lattice_ptr->getGridSize();
         }
 
         // Grand Joldes: access control lattice
-        latticeType* getControlLattice()
+        latticeType* getControlLattice() const
         {
             return dense_lattice_ptr->getControlLattice();
         }
 
         // Grand Joldes: access level
-        size_t getLevel() { return level; };
+        size_t getLevel() const { return m_level; };
 
         // Grand Joldes: access residual
-        double getResidual() { return residual; };
+        double getResidual() { return dense_lattice_ptr->getResidual(); };
 
-        // Grand Joldes: increase level
+        // Grand Joldes: increase refinement level
         template <class CooIter, class ValIter>
         void vIncreaseRefinementLevel(CooIter coo_begin, CooIter coo_end, ValIter val_begin, size_t newLevel)
         {
-            using namespace mba::detail;
-
-            const ptrdiff_t n = std::distance(coo_begin, coo_end);
-            std::vector<double> val(val_begin, val_begin + n);
-
-            residual = dense_lattice_ptr->residual(coo_begin, coo_end, val.begin());
-
             // Refine control lattice.
-            for (; (level < newLevel); ++level) {
-                grid_size = grid_size * 2ul - 1ul;
-
-                // create refined control lattice
-                std::shared_ptr<dense_lattice_type> f = std::make_shared<dense_lattice_type>(
-                    coo_min, coo_max, grid_size, coo_begin, coo_end, val.begin());
-
-                residual = f->residual(coo_begin, coo_end, val.begin());
-
-                f->append_refined(*dense_lattice_ptr);
-                dense_lattice_ptr.swap(f);
+            for (; (m_level < newLevel); ++m_level) {
+                refine(coo_begin, coo_end, val_begin);
             }
         }
     private:
         typedef detail::control_lattice_dense<NDim>  dense_lattice_type;
-        size_t level;
+        size_t m_level;
         point<NDim> coo_min, coo_max;
         index<NDim> grid_size;
-        double residual;
 
         std::shared_ptr<dense_lattice_type> dense_lattice_ptr;
 
@@ -675,34 +662,33 @@ class MBA {
                 std::function<double(point<NDim>)> initial
                 )
         {
-            using namespace mba::detail;
             coo_min = cmin;
             coo_max = cmax;
             grid_size = grid;
             const ptrdiff_t n = std::distance(coo_begin, coo_end);
             std::vector<double> val(val_begin, val_begin + n);
 
-            level = 1;
+            m_level = 1;
             // Create dense control lattice.
             dense_lattice_ptr = std::make_shared<dense_lattice_type>(
                 cmin, cmax, grid_size, coo_begin, coo_end, val.begin(), initial);
-
-            residual = dense_lattice_ptr->residual(coo_begin, coo_end, val.begin());
-
+            double residual = getResidual();
             if (residual <= tol) return;
-
-            for (; (level < max_levels) && (residual > tol); ++level) {
-                grid_size = grid_size * 2ul - 1ul;
-
-                // create refined control lattice
-                std::shared_ptr<dense_lattice_type> f = std::make_shared<dense_lattice_type>(
-                    cmin, cmax, grid_size, coo_begin, coo_end, val.begin());
-
-                residual = f->residual(coo_begin, coo_end, val.begin());
-
-                f->append_refined(*dense_lattice_ptr);
-                dense_lattice_ptr.swap(f);
+            for (; (m_level < max_levels) && (residual > tol); ++m_level) {
+                refine(coo_begin, coo_end, val.begin());
+                residual = getResidual();
             }
+        }
+
+        template <class CooIter, class ValIter>
+        void refine(CooIter coo_begin, CooIter coo_end, ValIter val_begin)
+        {
+            grid_size = grid_size * 2ul - 1ul;
+            // create refined control lattice
+            std::shared_ptr<dense_lattice_type> f = std::make_shared<dense_lattice_type>(
+                coo_min, coo_max, grid_size, coo_begin, coo_end, val_begin);
+            f->append_refined(*dense_lattice_ptr);
+            dense_lattice_ptr.swap(f);
         }
 };
 

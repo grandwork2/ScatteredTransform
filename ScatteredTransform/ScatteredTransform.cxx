@@ -56,6 +56,12 @@ THE SOFTWARE.
 //
 namespace
 {
+	void vUpdateProgress( const double progress )
+	{
+		// Update progress bar in Slicer
+		std::cout << "<filter-progress>" << progress << "</filter-progress>" << std::endl << std::flush;
+	}
+
 	// this class is used together with the templated sub-class to handle 
 	// different space dimensions in a uniform manner in the code
 	class MBATransform {
@@ -237,7 +243,7 @@ namespace
 			const std::vector<float> &initial_landmark = initialLandmarks.at(k);
 			const std::vector<float> &displaced_landmark = displacedLandmarks.at(k);
 			unsigned i;
-			for (i = 0; i + 1 < SpaceDimension; i++)
+			for (i = 0; i + 1 < SpaceDimension; ++i)
 			{
 				if (SpaceDimension == 3)
 				{
@@ -258,8 +264,8 @@ namespace
 					pd[i] = displaced_landmark[i];
 				}
 			}
-			pi[i] = initial_landmark[i];
-			pd[i] = displaced_landmark[i];
+			pi[SpaceDimension - 1] = initial_landmark[SpaceDimension - 1];
+			pd[SpaceDimension - 1] = displaced_landmark[SpaceDimension - 1];
 			InitialPoints.push_back(pi);
 			DisplacedPoints.push_back(pd);
 		}
@@ -400,7 +406,7 @@ namespace
 			apCoordinateInterpolators[i] = std::make_shared<mba::MBA<SpaceDimension> >(min_coords, max_coords, aiNumGridPoints, 
 				InitialPoints.begin(), InitialPoints.end(), apValues.at(i)->begin(), uiMaxNumLevels, dTolerance, initialApproxFunction);
 			// Update progress
-			std::cout << "<filter-progress>" << ( i + 1.0 ) / ( SpaceDimension + 1.0 ) << "</filter-progress>" << std::endl;
+			vUpdateProgress((i + 1.0) / (SpaceDimension + 1.0));
 		};		
 
 		// make sure all interpolators have the same refinement level
@@ -520,13 +526,13 @@ namespace
 
 int main( int argc, char * argv[] )
 {
-	// Update progress
-	std::cout << "<filter-progress>" << 0.0 << "</filter-progress>" << std::endl;
-
 	itk::TimeProbe clock;
 	clock.Start();
 	// parse command line options
 	PARSE_ARGS;
+
+	// Update progress
+	vUpdateProgress(0.01);
 
 	// check for input errors
 	TCLAP::StdOutput TCLAP_output;
