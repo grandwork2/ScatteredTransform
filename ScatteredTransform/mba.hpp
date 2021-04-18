@@ -147,7 +147,7 @@ class grid_iterator {
         explicit grid_iterator(const index<NDim> &dims)
             : N(dims), i{0}, done(i == N), idx(0) { }
 
-        explicit grid_iterator(size_t dim) : i{0}, idx(0), done(dim == 0) {
+        explicit grid_iterator(size_t dim) : i{0}, done(dim == 0), idx(0) {
             for(auto &v : N)  v = dim;
         }
 
@@ -333,13 +333,13 @@ class control_lattice_dense {
             if (initial)
             {
                 restore_values(coo_begin, coo_end, val_begin); // restore interpolated values
-                for (ptrdiff_t i = 0; i < m; ++i) {
+                for (size_t i = 0; i < m; ++i) {
                     phi[i] += safe_divide(delta[i], omega[i]);
                 }
             }
             else
             {
-                for (ptrdiff_t i = 0; i < m; ++i) {
+                for (size_t i = 0; i < m; ++i) {
                     phi[i] = safe_divide(delta[i], omega[i]);
                 }
             }
