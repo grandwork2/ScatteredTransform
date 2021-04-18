@@ -36,6 +36,7 @@ THE SOFTWARE.
 #include <functional>
 #include <array>
 #include <memory>
+#include <cmath>
 
 // ITK includes
 #include "itkFloatingPointExceptions.h"
@@ -374,13 +375,13 @@ namespace
 		std::cout << "]" << std::endl;
 
 		// use minGridSpacing to constrain maximum refinement level
-		double maxRatio = 0;
+		double maxRatio = 0.0;
 		for (unsigned int i = 0; i < SpaceDimension; i++)
 		{
 			double d = (max_coords[i] - min_coords[i])/(aiNumGridPoints[i]-1)/minGridSpacing;
 			if (d > maxRatio) maxRatio = d;
 		}
-		unsigned int uiMaxLevel = log(maxRatio)/log(2.0) + 1;
+		unsigned int uiMaxLevel = static_cast <unsigned int>(std::floor(std::log2(maxRatio))) + 1;
 		if (uiMaxLevel < uiMaxNumLevels)
 		{
 			uiMaxNumLevels = uiMaxLevel;
