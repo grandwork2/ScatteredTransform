@@ -75,7 +75,7 @@ namespace
 			const std::vector<std::vector<float> > &displacedLandmarks, bool boTransformCS) = 0;
 		virtual int iCreateTransform(const std::vector<double> &adGridSpacing, bool boDomainFromInputPoints,
 			const std::vector<double> &adDomainMinCorner, const std::vector<double> &adDomainMaxCorner,
-			const double dTolerance, unsigned int uiMaxNumLevels, const double minGridSpacing, const bool boAddLinearApproximation) = 0;
+			const double dTolerance, const unsigned int uiMaxNumLevels, const double minGridSpacing, const bool boAddLinearApproximation) = 0;
 		virtual int iSaveTransform(const char *pcTransformFileName) = 0;
 		virtual double dGetResidual(void) = 0;
 	};
@@ -99,7 +99,7 @@ namespace
 			
 		int iCreateTransform(const std::vector<double> &adGridSpacing, bool boDomainFromInputPoints,
 			const std::vector<double> &adDomainMinCorner, const std::vector<double> &adDomainMaxCorner,
-			const double dTolerance, unsigned int uiMaxNumLevels, const double minGridSpacing, const bool boAddLinearApproximation);
+			const double dTolerance, const unsigned int uiMaxNumLevels, const double minGridSpacing, const bool boAddLinearApproximation);
 		int iSaveTransform(const char *pcTransformFileName);
 		virtual double dGetResidual(void) {return residual;};
 
@@ -276,7 +276,7 @@ namespace
 	template <unsigned SpaceDimension> 
 	int MBATransformND<SpaceDimension>::iCreateTransform(const std::vector<double> &adGridSpacing, bool boDomainFromInputPoints,
 			const std::vector<double> &adDomainMinCorner, const std::vector<double> &adDomainMaxCorner,
-			const double dTolerance, unsigned int uiMaxNumLevels, const double minGridSpacing, const bool boAddLinearApproximation)
+			const double dTolerance, const unsigned int uiMaxNumLevels, const double minGridSpacing, const bool boAddLinearApproximation)
 	{
 		// check that the array of points have the same size
 		size_t uiNumPoints = InitialPoints.size();
@@ -379,17 +379,20 @@ namespace
 		for (unsigned int i = 0; i < SpaceDimension; i++)
 		{
 			double d = (max_coords[i] - min_coords[i])/(aiNumGridPoints[i]-1)/minGridSpacing;
-			if (d > maxRatio) maxRatio = d;
+			if (d > maxRatio)
+			{
+				maxRatio = d;
+			}
 		}
 		unsigned int uiMaxLevel = static_cast <unsigned int>(std::floor(std::log2(maxRatio))) + 1;
 		if (uiMaxLevel < uiMaxNumLevels)
 		{
-			uiMaxNumLevels = uiMaxLevel;
-			std::cout << "Maximum number of levels: " << uiMaxNumLevels << " (limited by minimum grid spacing)"<< std::endl;
+			std::cout << "Maximum number of levels: " << uiMaxLevel << " (limited by minimum grid spacing)"<< std::endl;
 		}
 		else
 		{
-			std::cout << "Maximum number of levels: " << uiMaxNumLevels << std::endl;
+			uiMaxLevel = uiMaxNumLevels;
+			std::cout << "Maximum number of levels: " << uiMaxLevel << std::endl;
 		}
 
 		
@@ -405,7 +408,7 @@ namespace
 			}
 			else initialApproxFunction = std::function<double(pointType)>();
 			apCoordinateInterpolators[i] = std::make_shared<mba::MBA<SpaceDimension> >(min_coords, max_coords, aiNumGridPoints, 
-				InitialPoints.begin(), InitialPoints.end(), apValues.at(i)->begin(), uiMaxNumLevels, dTolerance, initialApproxFunction);
+				InitialPoints.begin(), InitialPoints.end(), apValues.at(i)->begin(), uiMaxLevel, dTolerance, initialApproxFunction);
 			// Update progress
 			vUpdateProgress((i + 1.0) / (SpaceDimension + 1.0));
 		};		
@@ -657,8 +660,8 @@ int main( int argc, char * argv[] )
 
 	double dTolerance = tolerance;					// absolute tolerance of approximation
 	bool boAddLinearApproximation = useLinearApproximation;	// use linear approximation as starting point?
-	minGridSpacing = abs(minGridSpacing); 
-	unsigned int uiMaxNumLevels = abs(maxNumLevels);		// maximum number of grid refinement
+	minGridSpacing = std::abs(minGridSpacing); 
+	unsigned int uiMaxNumLevels = std::abs(maxNumLevels);		// maximum number of grid refinement
 	
 	// handle transforms for different space dimensions
 	std::shared_ptr<MBATransform> pTransform;
