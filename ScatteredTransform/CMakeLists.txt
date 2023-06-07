@@ -11,6 +11,7 @@ set(MODULE_NAME ScatteredTransform)
 #-----------------------------------------------------------------------------
 set(MODULE_INCLUDE_DIRECTORIES
   ${CMAKE_CURRENT_SOURCE_DIR}
+  ${MRMLCore_INCLUDE_DIRS}
   )
 
 set(MODULE_SRCS
@@ -19,6 +20,7 @@ set(MODULE_SRCS
 
 set(MODULE_TARGET_LIBRARIES
   ${ITK_LIBRARIES}
+  MRMLCore
   )
 
 #-----------------------------------------------------------------------------

@@ -49,6 +49,12 @@ THE SOFTWARE.
 #include "mba.hpp"
 #include "ScatteredTransformCLP.h"
 
+// VTK includes
+#include <vtkPointSet.h>
+
+// MRML includes
+#include <vtkMRMLModelNode.h>
+#include <vtkMRMLModelStorageNode.h>
 
 // Use an anonymous namespace to keep class types and function names
 // from colliding when module is used as shared object module.  Every
@@ -69,10 +75,10 @@ namespace
     public:
 		MBATransform() {};
 		virtual ~MBATransform() {};
-		virtual int iReadInitialPoints(const char *pcInitialPoints, bool boIgnoreFirstValue, bool boTransformCS) = 0;
-		virtual int iReadDisplacedPoints(const char *pcDisplacedPoints, bool boIgnoreFirstValue, bool boTransformCS) = 0;
+		virtual int iReadInitialPoints(const char *pcInitialPoints) = 0;
+		virtual int iReadDisplacedPoints(const char *pcDisplacedPoints) = 0;
 		virtual void vGetLandmarks(const std::vector<std::vector<float> > &initialLandmarks, 
-			const std::vector<std::vector<float> > &displacedLandmarks, bool boTransformCS) = 0;
+			const std::vector<std::vector<float> > &displacedLandmarks) = 0;
 		virtual int iCreateTransform(const std::vector<double> &adGridSpacing, bool boDomainFromInputPoints,
 			const std::vector<double> &adDomainMinCorner, const std::vector<double> &adDomainMaxCorner,
 			const double dTolerance, const unsigned int uiMaxNumLevels, const double minGridSpacing, const bool boAddLinearApproximation) = 0;
@@ -87,15 +93,15 @@ namespace
 		typedef std::array<double, SpaceDimension> pointType;
 		MBATransformND():residual(-1.0) {};
 
-		int iReadInitialPoints(const char *pcInitialPoints, bool boIgnoreFirstValue, bool boTransformCS) {
-			return iReadPoints(pcInitialPoints, InitialPoints, boIgnoreFirstValue, boTransformCS);
+		int iReadInitialPoints(const char *pcInitialPoints) {
+			return iReadPoints(pcInitialPoints, InitialPoints);
 		};
-		int iReadDisplacedPoints(const char *pcDisplacedPoints, bool boIgnoreFirstValue,  bool boTransformCS) {
-			return iReadPoints(pcDisplacedPoints, DisplacedPoints, boIgnoreFirstValue, boTransformCS);
+		int iReadDisplacedPoints(const char *pcDisplacedPoints) {
+			return iReadPoints(pcDisplacedPoints, DisplacedPoints);
 		};
 
 		void vGetLandmarks(const std::vector<std::vector<float> > &initialLandmarks, 
-			const std::vector<std::vector<float> > &displacedLandmarks, bool boTransformCS);
+			const std::vector<std::vector<float> > &displacedLandmarks);
 			
 		int iCreateTransform(const std::vector<double> &adGridSpacing, bool boDomainFromInputPoints,
 			const std::vector<double> &adDomainMinCorner, const std::vector<double> &adDomainMaxCorner,
@@ -115,9 +121,7 @@ namespace
 		transformPointerType transform;
 		double residual;
 
-		int iReadPoints(const char *pcFile, pointsVectorType &Points, bool boIgnoreFirstValue, bool boTransformCS);
-		int iParseLine(std::string line, pointType &p, bool boIgnoreFirstValue, bool boTransformCS);
-		
+		int iReadPoints(const char *pcFile, pointsVectorType &Points);
 	};
 
 	template <unsigned SpaceDimension> 
@@ -143,98 +147,54 @@ namespace
 	}
 
 	template <unsigned SpaceDimension> 
-	int MBATransformND<SpaceDimension>::iParseLine(std::string line, pointType &p, bool boIgnoreFirstValue, bool boTransformCS)
+	int MBATransformND<SpaceDimension>::iReadPoints(const char* pcFile, pointsVectorType& Points)
 	{
-		std::stringstream stream(line);
-		double d;
-		char c;
-		if (boIgnoreFirstValue)	stream >> d >> c;
-		if (stream.good())
-		{
-			unsigned i;
-			for (i = 0; i + 1 < SpaceDimension; i++)
-			{
-				stream >> d >> c;
-				if (SpaceDimension == 3)
-				{
-					if (stream.good()) 
-					{
-						if (boTransformCS)	p[i] = -d;
-						else p[i] = d;
-					}
-					else return 1;
-				}
-				else
-				{
-					if (stream.good()) p[i] = d;
-					else return 1;
-				}
-			}
-			stream >> d;
-			if (!stream.fail()) p[i] = d;
-			else return 1;
-		}
-		else return 1;
-		return 0;
+	vtkNew<vtkMRMLModelNode> modelNode;
+	vtkNew<vtkMRMLModelStorageNode> storageNode;
+	storageNode->SetFileName(pcFile);
+	if (storageNode->ReadData(modelNode) == 0)
+	{
+		std::cerr << "Failed to read file " << pcFile << std::endl;
+		return 1;
 	}
 
-	template <unsigned SpaceDimension> 
-	int MBATransformND<SpaceDimension>::iReadPoints(const char *pcFile, pointsVectorType &Points, bool boIgnoreFirstValue, bool boTransformCS)
+	vtkPointSet* pointSet = modelNode->GetMesh();
+	if (!pointSet)
 	{
-		// open input file
-		std::ifstream fileStream;
-		std::string line;
-		bool foundPoints = false;
-		fileStream.open(pcFile);
-		// read lines until succesfully read a point
-		if (fileStream.is_open())
-		{
-			while ( getline(fileStream,line) )
+		std::cerr << "Invalid mesh " << pcFile << std::endl;
+		return 1;
+	}
+
+	vtkPoints* points = pointSet->GetPoints();
+	if (!points)
+	{
+		std::cerr << "Invalid mesh points" << pcFile << std::endl;
+		return 1;
+	}
+
+	pointType newPoint;
+	for (int pointIndex = 0; pointIndex < points->GetNumberOfPoints(); ++pointIndex)
+	{
+		double* point = points->GetPoint(pointIndex);
+		for (int i = 0; i < SpaceDimension; ++i)
 			{
-				pointType p;
-				int iParseError = iParseLine(line, p, boIgnoreFirstValue, boTransformCS);
-				if (foundPoints)
-				{
-					if (iParseError)
-					{
-						// last point found
-						break;
-					}
-					else
-					{
-						// next point found
-						Points.push_back(p);
-					}
-				} else
-				{
-					if (!iParseError)
-					{
-						// first point found
-						Points.push_back(p);
-						foundPoints = true;
-					}
-				}
+			if (SpaceDimension == 3 && i < 2)
+			{
+				newPoint[i] = -point[i]; // RAS -> LPS
 			}
-			fileStream.close();
+			else
+			{
+				newPoint[i] = point[i];
+			}
 		}
-		else 
-		{
-			std::cerr << "Failed to open file " << pcFile << std::endl;
-			return 1;
-		}
-		size_t numPoints = Points.size();
-		if (!numPoints)
-		{
-			std::cerr << "No points found in file " << pcFile << std::endl;
-			return 1;
-		}
-		std::cout << "Read " << numPoints << " points from file " << pcFile << std::endl;
-		return 0;
+		Points.push_back(newPoint);
+	}
+	return 0;
 	};
 
 	template <unsigned SpaceDimension>
 	void MBATransformND<SpaceDimension>::vGetLandmarks(const std::vector<std::vector<float> > &initialLandmarks, 
-		const std::vector<std::vector<float> > &displacedLandmarks, bool boTransformCS)
+		const std::vector<std::vector<float> > &displacedLandmarks)
 	{
 		pointType pi, pd;
 		size_t numPoints = initialLandmarks.size();
@@ -244,29 +204,11 @@ namespace
 			const std::vector<float> &initial_landmark = initialLandmarks.at(k);
 			const std::vector<float> &displaced_landmark = displacedLandmarks.at(k);
 			unsigned i;
-			for (i = 0; i + 1 < SpaceDimension; ++i)
+			for (i = 0; i < SpaceDimension; ++i)
 			{
-				if (SpaceDimension == 3)
-				{
-					if (boTransformCS)
-					{
-						pi[i] = -initial_landmark[i];
-						pd[i] = -displaced_landmark[i];
-					}
-					else
-					{
-						pi[i] = initial_landmark[i];
-						pd[i] = displaced_landmark[i];
-					}
-				}
-				else
-				{
-					pi[i] = initial_landmark[i];
-					pd[i] = displaced_landmark[i];
-				}
+				pi[i] = initial_landmark[i];
+				pd[i] = displaced_landmark[i];
 			}
-			pi[SpaceDimension - 1] = initial_landmark[SpaceDimension - 1];
-			pd[SpaceDimension - 1] = displaced_landmark[SpaceDimension - 1];
 			InitialPoints.push_back(pi);
 			DisplacedPoints.push_back(pd);
 		}
@@ -589,20 +531,12 @@ int main( int argc, char * argv[] )
 		ShowMessagesAndExit(EXIT_FAILURE);
 	}
 
-	// perform coordinate transform?
-	bool boTransformCS = false;
-	if (intendedUse == "Slicer") boTransformCS = true;
-
-	// If set true, the first value read from a line of values is ignored
-	bool boIgnoreFirstValue = ignoreFirstValue;
-
 	// name of input data files
 	char *pcInitialPoints = (char *)initialPointsFile.c_str();
 	char *pcDisplacedPoints = (char *)displacedPointsFile.c_str();
 
 	// transform parameters
 	bool boInvertTransform = invertTransform;		// invert the transform?
-	if (boTransformCS) boInvertTransform = true;
 
 	std::vector<double> adGridSpacing;		// grid spacing
 	if (splineGridSpacing.size() < uiSpaceDimension)
@@ -645,16 +579,8 @@ int main( int argc, char * argv[] )
 				std::cerr << "ERROR: The minimum domain coordinates must be smaller than the maximum domain coordinates!" << std::endl;
 				ShowMessagesAndExit(EXIT_FAILURE);
 			}
-			if (boTransformCS && (uiSpaceDimension == 3) && (i < 2))
-			{
-				adDomainMinCorner.push_back(-maxCoordinates[i]);
-				adDomainMaxCorner.push_back(-minCoordinates[i]);
-			}
-			else
-			{
-				adDomainMinCorner.push_back(minCoordinates[i]);
-				adDomainMaxCorner.push_back(maxCoordinates[i]);
-			}
+		adDomainMinCorner.push_back(minCoordinates[i]);
+		adDomainMaxCorner.push_back(maxCoordinates[i]);
 		}
 	}
 
@@ -690,21 +616,22 @@ int main( int argc, char * argv[] )
 		};
 	};
 
-	if (boInvertTransform)
+	if (boGetPointsFromFiles)
 	{
-		char *pcSave = pcInitialPoints;
-		pcInitialPoints = pcDisplacedPoints;
-		pcDisplacedPoints = pcSave;
-	}
-	if (boGetPointsFromFiles == true)
-	{
-		if (pTransform->iReadInitialPoints(pcInitialPoints, boIgnoreFirstValue, boTransformCS))
+		if (boInvertTransform)
+		{
+			char *pcSave = pcInitialPoints;
+			pcInitialPoints = pcDisplacedPoints;
+			pcDisplacedPoints = pcSave;
+		}
+
+		if (pTransform->iReadInitialPoints(pcInitialPoints))
 		{
 			std::cerr << "ERROR: Failed to read initial points from " << pcInitialPoints << std::endl;
 			ShowMessagesAndExit(EXIT_FAILURE);
 		};
 
-		if (pTransform->iReadDisplacedPoints(pcDisplacedPoints, boIgnoreFirstValue, boTransformCS))
+		if (pTransform->iReadDisplacedPoints(pcDisplacedPoints))
 		{
 			std::cerr << "ERROR: Failed to read displaced points from " << pcDisplacedPoints << std::endl;
 			ShowMessagesAndExit(EXIT_FAILURE);
@@ -712,8 +639,14 @@ int main( int argc, char * argv[] )
 	}
 	else
 	{
-		if (boInvertTransform) pTransform->vGetLandmarks(displacedLandmarks, initialLandmarks, boTransformCS);
-		else pTransform->vGetLandmarks(initialLandmarks, displacedLandmarks, boTransformCS);
+		if (boInvertTransform)
+		{
+			pTransform->vGetLandmarks(displacedLandmarks, initialLandmarks);
+		}
+		else
+		{
+			pTransform->vGetLandmarks(initialLandmarks, displacedLandmarks);
+		}
 	};
 	
 	clock.Stop();
