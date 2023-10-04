@@ -47,13 +47,6 @@
       <default></default>
       <description><![CDATA[File with displaced point positions]]></description>
     </file>
-    <boolean>
-      <name>ignoreFirstValue</name>
-      <longflag>ignoreFirstValue</longflag>
-      <label>   Ignore first value</label>
-      <description>Ignores first value in each line of the input files (which may be a node number).</description>
-      <default>false</default>
-    </boolean>
   </parameters>
   <parameters advanced="false">
     <label>Output transform</label>
@@ -86,15 +79,6 @@
       <element>1D</element>
       <element>2D</element>
       <element>3D</element>
-    </string-enumeration>
-    <string-enumeration>
-      <name>intendedUse</name>
-      <longflag>intendedUse</longflag>
-      <label>   For use in</label>
-      <description>Where is the transform going to be used (only 3D transforms can be used in Slicer)?</description>
-      <default>Slicer</default>
-      <element>ITK</element>
-      <element>Slicer</element>
     </string-enumeration>
     <boolean>
       <name>invertTransform</name>
